@@ -1,0 +1,5 @@
+{
+  "name": "AI RPG State Processor 0.02",
+  "description": "A Game Master module for AI D&D. Manages world state, processes player intentions via Gemini API tools, and generates narrative outcomes.",
+  "requestFramePermissions": []
+}
