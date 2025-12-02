@@ -15,6 +15,9 @@ dist-ssr
 # Test coverage
 coverage/
 
+# Project data (generated/modified by application)
+data/
+
 # Environment variables
 .env
 .env.local
