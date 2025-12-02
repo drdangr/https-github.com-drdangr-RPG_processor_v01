@@ -5,7 +5,7 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "change_object_state",
-    description: "Обновить описание состояния объекта.",
+    description: "Изменить состояние объекта, который продолжает существовать в мире.",
     parameters: {
       type: Type.OBJECT,
       properties: {
