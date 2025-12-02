@@ -206,3 +206,4 @@ export function statesEqual(state1: GameState, state2: GameState): boolean {
   return JSON.stringify(state1) === JSON.stringify(state2);
 }
 
+
