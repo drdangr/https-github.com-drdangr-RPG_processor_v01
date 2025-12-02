@@ -5,7 +5,7 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "delete_object",
-    description: "Удалить объект, который перестал существовать в мире. Вложенные объекты будут перемещены туда, где был удалённый объект.",
+    description: "Удалить объект, который перестал существовать в мире как первоночальная сущность. Вложенные объекты будут перемещены туда, где был удалённый объект.",
     parameters: {
       type: Type.OBJECT,
       properties: {

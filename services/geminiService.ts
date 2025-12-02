@@ -166,8 +166,8 @@ ${JSON.stringify(state, null, 2)}
           model: modelId,
           contents: historyContents,
           config: {
-              systemInstruction: createSystemInstruction(workingState),
-              tools: geminiTools 
+              systemInstruction: createSystemInstruction(workingState) + "\n\nВАЖНО: Инструменты уже выполнены. Сгенерируй ТОЛЬКО художественное повествование о результате действий. НЕ вызывай инструменты.",
+              // Не передаём tools - это заставит Gemini генерировать только текст
           }
       });
 
