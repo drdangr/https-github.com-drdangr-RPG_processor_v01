@@ -3,7 +3,7 @@ import { GameState, SimulationResult, WorldData, LocationData, PlayerData, Objec
 import { INITIAL_STATE } from './constants';
 import { ALL_TOOLS } from './tools/index';
 import { processGameTurn } from './services/geminiService';
-import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor } from './components/FormEditors';
+import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor, ConnectionTarget } from './components/FormEditors';
 import DiffView from './components/DiffView';
 import { saveDataFiles } from './utils/dataExporter';
 
@@ -250,7 +250,18 @@ const App: React.FC = () => {
             {activeTab === 'world' && <WorldEditor data={gameState.world} onChange={updateWorld} onSave={handleSaveToFiles} />}
             {activeTab === 'locations' && <LocationsEditor data={gameState.locations} onChange={updateLocations} onSave={handleSaveToFiles} />}
             {activeTab === 'players' && <PlayersEditor data={gameState.players} onChange={updatePlayers} onSave={handleSaveToFiles} />}
-            {activeTab === 'objects' && <ObjectsEditor data={gameState.objects} onChange={updateObjects} onSave={handleSaveToFiles} />}
+            {activeTab === 'objects' && (
+              <ObjectsEditor 
+                data={gameState.objects} 
+                onChange={updateObjects} 
+                onSave={handleSaveToFiles}
+                connectionTargets={[
+                  ...gameState.players.map(p => ({ id: p.id, name: p.name, type: 'player' as const })),
+                  ...gameState.locations.map(l => ({ id: l.id, name: l.name, type: 'location' as const })),
+                  ...gameState.objects.map(o => ({ id: o.id, name: o.name, type: 'object' as const }))
+                ]}
+              />
+            )}
           </div>
         </section>
 

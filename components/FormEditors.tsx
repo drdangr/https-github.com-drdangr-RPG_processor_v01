@@ -40,6 +40,63 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", c
   );
 };
 
+interface SelectOption {
+  id: string;
+  label: string;
+  group?: string;
+}
+
+const SelectField = ({ label, value, onChange, options, placeholder = "Выберите...", className = "", onSave }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  className?: string;
+  onSave?: () => void;
+}) => {
+  const finalId = `select_${Math.random().toString(36).substr(2, 9)}`;
+
+  // Группируем опции по group
+  const grouped = options.reduce((acc, opt) => {
+    const group = opt.group || 'Другое';
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(opt);
+    return acc;
+  }, {} as Record<string, SelectOption[]>);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (onSave) onSave();
+    }
+  };
+
+  return (
+    <div className={`mb-3 ${className}`}>
+      <label htmlFor={finalId} className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">{label}</label>
+      <select
+        id={finalId}
+        className="w-full bg-gray-950 border border-gray-800 text-gray-300 text-xs rounded px-2 py-2 focus:outline-none focus:border-purple-500 transition-colors"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+      >
+        <option value="" className="text-gray-500">{placeholder}</option>
+        {Object.entries(grouped).map(([groupName, groupOptions]) => (
+          <optgroup key={groupName} label={groupName} className="bg-gray-900">
+            {groupOptions.map(opt => (
+              <option key={opt.id} value={opt.id} className="bg-gray-950">
+                {opt.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 const TextAreaField = ({ label, value, onChange, rows = 3, name, id, onSave }: any) => {
     const finalId = id || `text_${Math.random().toString(36).substr(2, 9)}`;
     const finalName = name || `area_${Math.random().toString(36).substr(2, 9)}`;
@@ -221,8 +278,27 @@ export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerD
   );
 };
 
-export const ObjectsEditor: React.FC<{ data: ObjectData[]; onChange: (d: ObjectData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
+export interface ConnectionTarget {
+  id: string;
+  name: string;
+  type: 'player' | 'location' | 'object';
+}
+
+export const ObjectsEditor: React.FC<{ 
+  data: ObjectData[]; 
+  onChange: (d: ObjectData[]) => void; 
+  onSave?: () => void;
+  connectionTargets?: ConnectionTarget[];
+}> = ({ data, onChange, onSave, connectionTargets = [] }) => {
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', description: '', connectionId: '', state: 'Normal' }]);
+  
+  // Преобразуем targets в опции для SelectField
+  const connectionOptions: SelectOption[] = connectionTargets.map(t => ({
+    id: t.id,
+    label: `${t.name} (${t.id})`,
+    group: t.type === 'player' ? '👤 Игроки' : t.type === 'location' ? '📍 Локации' : '📦 Объекты'
+  }));
+
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
@@ -231,7 +307,14 @@ export const ObjectsEditor: React.FC<{ data: ObjectData[]; onChange: (d: ObjectD
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
            <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
            <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
-           <InputField label="Connected To (ID)" value={item.connectionId} onChange={(v: string) => { const n = [...data]; n[i].connectionId = v; onChange(n); }} onSave={onSave} />
+           <SelectField 
+             label="Connected To" 
+             value={item.connectionId} 
+             onChange={(v: string) => { const n = [...data]; n[i].connectionId = v; onChange(n); }} 
+             options={connectionOptions.filter(opt => opt.id !== item.id)} 
+             placeholder="Выберите владельца/контейнер..."
+             onSave={onSave} 
+           />
            <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
         </ListItem>
       ))}
