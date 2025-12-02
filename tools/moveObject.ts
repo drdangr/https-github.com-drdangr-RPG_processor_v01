@@ -4,13 +4,13 @@ import { cloneState } from '../utils/gameUtils';
 
 const tool: GameTool = {
   definition: {
-    name: "change_object_location",
-    description: "Переместить объект в новую локацию, передать игроку или поместить внутрь другого объекта.",
+    name: "move_object",
+    description: "Переместить объект: передать игроку, поместить в локацию или внутрь другого объекта.",
     parameters: {
       type: Type.OBJECT,
       properties: {
         objectId: { type: Type.STRING, description: "ID объекта для перемещения." },
-        targetId: { type: Type.STRING, description: "ID нового родителя (Location ID, Player ID или Object ID)." },
+        targetId: { type: Type.STRING, description: "ID нового владельца/контейнера (Player ID, Location ID или Object ID)." },
       },
       required: ["objectId", "targetId"],
     },
@@ -32,3 +32,4 @@ const tool: GameTool = {
 };
 
 export default tool;
+
