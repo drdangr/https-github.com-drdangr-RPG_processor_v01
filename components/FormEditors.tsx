@@ -139,20 +139,40 @@ const ConnectionEditor = ({ locId, connections, onChange }: { locId: string, con
     );
 };
 
-export const WorldEditor: React.FC<{ data: WorldData; onChange: (d: WorldData) => void }> = ({ data, onChange }) => {
+export const WorldEditor: React.FC<{ data: WorldData; onChange: (d: WorldData) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
   return (
     <div className="p-4">
+      {onSave && (
+        <button 
+          type="button" 
+          onClick={onSave} 
+          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
+          title="Сохранить данные в файлы папки data"
+        >
+          💾 СОХРАНИТЬ
+        </button>
+      )}
       <InputField label="Genre" value={data.gameGenre} onChange={(v: string) => onChange({ ...data, gameGenre: v })} />
       <TextAreaField label="Description" value={data.worldDescription} onChange={(v: string) => onChange({ ...data, worldDescription: v })} rows={12} />
     </div>
   );
 };
 
-export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: LocationData[]) => void }> = ({ data, onChange }) => {
+export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: LocationData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
   const add = () => onChange([...data, { id: `loc_${Date.now()}`, name: 'New Loc', description: '', currentSituation: '', state: 'Normal', connections: [] }]);
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW LOCATION</button>
+      {onSave && (
+        <button 
+          type="button" 
+          onClick={onSave} 
+          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
+          title="Сохранить данные в файлы папки data"
+        >
+          💾 СОХРАНИТЬ
+        </button>
+      )}
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} />
@@ -166,11 +186,21 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
   );
 };
 
-export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerData[]) => void }> = ({ data, onChange }) => {
+export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
   const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', health: 100, state: 'OK', inventory: [], locationId: '' }]);
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW PLAYER</button>
+      {onSave && (
+        <button 
+          type="button" 
+          onClick={onSave} 
+          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
+          title="Сохранить данные в файлы папки data"
+        >
+          💾 СОХРАНИТЬ
+        </button>
+      )}
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} />
@@ -187,11 +217,21 @@ export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerD
   );
 };
 
-export const ObjectsEditor: React.FC<{ data: ObjectData[]; onChange: (d: ObjectData[]) => void }> = ({ data, onChange }) => {
+export const ObjectsEditor: React.FC<{ data: ObjectData[]; onChange: (d: ObjectData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', description: '', connectionId: '', state: 'Normal' }]);
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
+      {onSave && (
+        <button 
+          type="button" 
+          onClick={onSave} 
+          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
+          title="Сохранить данные в файлы папки data"
+        >
+          💾 СОХРАНИТЬ
+        </button>
+      )}
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} />

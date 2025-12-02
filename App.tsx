@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameState, SimulationResult, WorldData, LocationData, PlayerData, ObjectData } from './types';
 import { INITIAL_STATE } from './constants';
 import { ALL_TOOLS } from './tools/index';
 import { processGameTurn } from './services/geminiService';
 import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor } from './components/FormEditors';
 import DiffView from './components/DiffView';
+import { saveDataFiles } from './utils/dataExporter';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
@@ -23,6 +24,8 @@ const App: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [globalErrors, setGlobalErrors] = useState<string[]>([]);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleGlobalError = (event: ErrorEvent) => {
@@ -46,10 +49,112 @@ const App: React.FC = () => {
     return () => window.removeEventListener('error', handleGlobalError);
   }, []);
 
-  const updateWorld = (w: WorldData) => setGameState(prev => ({ ...prev, world: w }));
-  const updateLocations = (l: LocationData[]) => setGameState(prev => ({ ...prev, locations: l }));
-  const updatePlayers = (p: PlayerData[]) => setGameState(prev => ({ ...prev, players: p }));
-  const updateObjects = (o: ObjectData[]) => setGameState(prev => ({ ...prev, objects: o }));
+  const updateWorld = (w: WorldData) => {
+    setGameState(prev => {
+      const newState = { ...prev, world: w };
+      setHasUnsavedChanges(true);
+      scheduleAutoSave(newState);
+      return newState;
+    });
+  };
+  
+  const updateLocations = (l: LocationData[]) => {
+    setGameState(prev => {
+      const newState = { ...prev, locations: l };
+      setHasUnsavedChanges(true);
+      scheduleAutoSave(newState);
+      return newState;
+    });
+  };
+  
+  const updatePlayers = (p: PlayerData[]) => {
+    setGameState(prev => {
+      const newState = { ...prev, players: p };
+      setHasUnsavedChanges(true);
+      scheduleAutoSave(newState);
+      return newState;
+    });
+  };
+  
+  const updateObjects = (o: ObjectData[]) => {
+    setGameState(prev => {
+      const newState = { ...prev, objects: o };
+      setHasUnsavedChanges(true);
+      scheduleAutoSave(newState);
+      return newState;
+    });
+  };
+
+  // Автоматическое сохранение с задержкой
+  const scheduleAutoSave = (state: GameState) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    saveTimeoutRef.current = setTimeout(() => {
+      saveDataToServer(state);
+    }, 2000); // Сохраняем через 2 секунды после последнего изменения
+  };
+
+  // Сохранение данных на сервер (если API доступен) или в localStorage
+  const saveDataToServer = async (state: GameState) => {
+    try {
+      // Попытка сохранить через API
+      const response = await fetch('/api/save-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state)
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        setHasUnsavedChanges(false);
+        console.log('[App] ✅ Данные сохранены в файлы папки data:', result);
+        return;
+      } else {
+        console.warn('[App] ⚠️ Сервер вернул ошибку:', response.status);
+      }
+    } catch (err) {
+      // API недоступен, сохраняем в localStorage как резервную копию
+      console.log('[App] ⚠️ API недоступен, сохраняем в localStorage как резервную копию');
+    }
+    
+    // Резервное сохранение в localStorage
+    try {
+      localStorage.setItem('rpg_game_state_backup', JSON.stringify(state));
+      console.log('[App] 💾 Данные сохранены в localStorage (резервная копия)');
+    } catch (e) {
+      console.error('[App] ❌ Ошибка сохранения в localStorage:', e);
+    }
+  };
+
+  // Загрузка данных из localStorage при старте (если есть)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rpg_game_state_backup');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Проверяем, что данные валидны
+        if (parsed.world && parsed.locations && parsed.players && parsed.objects) {
+          console.log('[App] Найдены сохраненные данные в localStorage');
+          // Не перезаписываем автоматически, только если пользователь хочет
+        }
+      }
+    } catch (e) {
+      console.warn('[App] Не удалось загрузить из localStorage:', e);
+    }
+  }, []);
+
+  // Ручное сохранение в файлы
+  const handleSaveToFiles = async () => {
+    // Сначала пытаемся сохранить через API
+    await saveDataToServer(gameState);
+    
+    // Также предлагаем скачать файлы (на случай, если API не работает)
+    if (hasUnsavedChanges) {
+      saveDataFiles(gameState);
+      console.log('[App] 📥 Файлы также скачаны в браузер');
+    }
+  };
 
   const toggleTool = (toolName: string) => {
       setToolEnabledState(prev => ({
@@ -92,6 +197,8 @@ const App: React.FC = () => {
   const handleCommitChanges = () => {
     if (lastResult) {
       setGameState(lastResult.newState);
+      setHasUnsavedChanges(true);
+      scheduleAutoSave(lastResult.newState);
       setLastResult(null);
       setPlayerInput('');
     }
@@ -112,6 +219,11 @@ const App: React.FC = () => {
             </div>
         </div>
         <div className="flex items-center gap-4">
+            {hasUnsavedChanges && (
+                <div className="text-xs font-bold text-yellow-500 bg-yellow-900/20 px-3 py-1 rounded border border-yellow-900">
+                    НЕСОХРАНЕНО
+                </div>
+            )}
             {apiKeyMissing && (
                 <div className="text-xs font-bold text-red-500 bg-red-900/20 px-3 py-1 rounded border border-red-900 animate-pulse">
                     MISSING API KEY
@@ -141,10 +253,10 @@ const App: React.FC = () => {
             ))}
           </div>
           <div className="flex-1 overflow-y-auto">
-            {activeTab === 'world' && <WorldEditor data={gameState.world} onChange={updateWorld} />}
-            {activeTab === 'locations' && <LocationsEditor data={gameState.locations} onChange={updateLocations} />}
-            {activeTab === 'players' && <PlayersEditor data={gameState.players} onChange={updatePlayers} />}
-            {activeTab === 'objects' && <ObjectsEditor data={gameState.objects} onChange={updateObjects} />}
+            {activeTab === 'world' && <WorldEditor data={gameState.world} onChange={updateWorld} onSave={handleSaveToFiles} />}
+            {activeTab === 'locations' && <LocationsEditor data={gameState.locations} onChange={updateLocations} onSave={handleSaveToFiles} />}
+            {activeTab === 'players' && <PlayersEditor data={gameState.players} onChange={updatePlayers} onSave={handleSaveToFiles} />}
+            {activeTab === 'objects' && <ObjectsEditor data={gameState.objects} onChange={updateObjects} onSave={handleSaveToFiles} />}
           </div>
         </section>
 
