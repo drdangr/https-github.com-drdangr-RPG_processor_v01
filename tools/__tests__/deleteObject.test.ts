@@ -344,3 +344,4 @@ describe('delete_object tool', () => {
   });
 });
 
+
