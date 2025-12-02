@@ -34,7 +34,6 @@ interface PlayerData {
   id: string;          // Уникальный ID (напр. "char_001")
   name: string;
   description: string;
-  inventory: string[]; // Массив ID объектов (ссылки на Objects)
   health: number;
   state: string;       // Физическое/ментальное состояние
   locationId: string;  // ID локации, где находится персонаж (ВАЖНО для видимости предметов)
@@ -51,11 +50,11 @@ interface ObjectData {
   state: string;        // Состояние (напр. "Сломан", "Заряжен")
   connectionId: string; // ID родителя. Это может быть:
                         // - ID Локации (лежит на полу)
-                        // - ID Игрока (в инвентаре, но лучше использовать player.inventory)
+                        // - ID Игрока (объект принадлежит игроку)
                         // - ID Другого объекта (внутри ящика)
 }
 ```
 
 ## Принципы связей
-*   **Location Awareness:** ИИ определяет, что видит игрок, сравнивая `player.locationId` с `object.connectionId` (если объект в локации) или проверяя `player.inventory` (если объект у игрока).
-*   **Перемещение:** Перемещение предмета обычно означает изменение его `connectionId`.
+*   **Location Awareness:** ИИ определяет, что видит игрок, сравнивая `player.locationId` с `object.connectionId` (если объект в локации) или проверяя `object.connectionId === player.id` (если объект принадлежит игроку).
+*   **Перемещение:** Перемещение предмета означает изменение его `connectionId`.
