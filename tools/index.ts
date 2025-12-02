@@ -6,12 +6,14 @@ import moveObject from './moveObject';
 import changeObjectState from './changeObjectState';
 import changePlayerState from './changePlayerState';
 import changeLocationState from './changeLocationState';
+import createObject from './createObject';
 
 let tools: GameTool[] = [
   moveObject,
   changeObjectState,
   changePlayerState,
-  changeLocationState
+  changeLocationState,
+  createObject
 ];
 
 // --- Auto-Loader Mechanism ---
