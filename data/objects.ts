@@ -26,7 +26,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "id": "obj_1764621899013",
     "name": "Статуэтка в виде бюста Наполеона",
     "description": "небольшая гипсовая статуетка в виде бюста Наполеона, в которой обычно спрятан пакетик с травкой",
-    "connectionId": "loc_001",
+    "connectionId": "char_1764641742185",
     "state": "Normal"
   },
   {
