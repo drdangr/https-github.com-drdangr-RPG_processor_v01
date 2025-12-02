@@ -3,10 +3,20 @@ import { WorldData, LocationData, PlayerData, ObjectData } from '../types';
 
 // --- UI Primitives ---
 
-const InputField = ({ label, value, onChange, type = "text", placeholder = "", className = "", name, id }: any) => {
+const InputField = ({ label, value, onChange, type = "text", placeholder = "", className = "", name, id, onSave }: any) => {
   // Generate a random ID if none provided to avoid extension conflicts
   const finalId = id || `field_${Math.random().toString(36).substr(2, 9)}`;
   const finalName = name || `input_${Math.random().toString(36).substr(2, 9)}`;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Ctrl+Enter или Cmd+Enter для сохранения
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (onSave) {
+        onSave();
+      }
+    }
+  };
 
   return (
     <div className={`mb-3 ${className}`}>
@@ -18,6 +28,7 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", c
         className="w-full bg-gray-950 border border-gray-800 text-gray-300 text-xs rounded px-2 py-2 focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-700"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoComplete="new-password"
         data-gramm="false"
@@ -29,9 +40,19 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", c
   );
 };
 
-const TextAreaField = ({ label, value, onChange, rows = 3, name, id }: any) => {
+const TextAreaField = ({ label, value, onChange, rows = 3, name, id, onSave }: any) => {
     const finalId = id || `text_${Math.random().toString(36).substr(2, 9)}`;
     const finalName = name || `area_${Math.random().toString(36).substr(2, 9)}`;
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Ctrl+Enter или Cmd+Enter для сохранения в textarea
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (onSave) {
+          onSave();
+        }
+      }
+    };
 
     return (
     <div className="mb-3">
@@ -43,6 +64,7 @@ const TextAreaField = ({ label, value, onChange, rows = 3, name, id }: any) => {
         rows={rows}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         autoComplete="off"
         data-gramm="false"
         data-lpignore="true"
@@ -92,7 +114,7 @@ const ListItem: React.FC<ListItemProps> = ({ id, name, onDelete, children }) => 
 
 // --- Editors ---
 
-const ConnectionEditor = ({ locId, connections, onChange }: { locId: string, connections: LocationData['connections'], onChange: (c: LocationData['connections']) => void }) => {
+const ConnectionEditor = ({ locId, connections, onChange, onSave }: { locId: string, connections: LocationData['connections'], onChange: (c: LocationData['connections']) => void, onSave?: () => void }) => {
     const addConnection = () => {
         onChange([...connections, { targetLocationId: '', type: 'bidirectional' }]);
     };
@@ -105,6 +127,16 @@ const ConnectionEditor = ({ locId, connections, onChange }: { locId: string, con
 
     const removeConnection = (index: number) => {
         onChange(connections.filter((_, i) => i !== index));
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        // Ctrl+Enter или Cmd+Enter для сохранения
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            if (onSave) {
+                onSave();
+            }
+        }
     };
 
     return (
@@ -120,6 +152,7 @@ const ConnectionEditor = ({ locId, connections, onChange }: { locId: string, con
                         placeholder="Target ID"
                         value={conn.targetLocationId}
                         onChange={(e) => updateConnection(idx, 'targetLocationId', e.target.value)}
+                        onKeyDown={handleKeyDown}
                         autoComplete="off"
                         data-lpignore="true"
                     />
@@ -142,18 +175,8 @@ const ConnectionEditor = ({ locId, connections, onChange }: { locId: string, con
 export const WorldEditor: React.FC<{ data: WorldData; onChange: (d: WorldData) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
   return (
     <div className="p-4">
-      {onSave && (
-        <button 
-          type="button" 
-          onClick={onSave} 
-          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
-          title="Сохранить данные в файлы папки data"
-        >
-          💾 СОХРАНИТЬ
-        </button>
-      )}
-      <InputField label="Genre" value={data.gameGenre} onChange={(v: string) => onChange({ ...data, gameGenre: v })} />
-      <TextAreaField label="Description" value={data.worldDescription} onChange={(v: string) => onChange({ ...data, worldDescription: v })} rows={12} />
+      <InputField label="Genre" value={data.gameGenre} onChange={(v: string) => onChange({ ...data, gameGenre: v })} onSave={onSave} />
+      <TextAreaField label="Description" value={data.worldDescription} onChange={(v: string) => onChange({ ...data, worldDescription: v })} rows={12} onSave={onSave} />
     </div>
   );
 };
@@ -163,23 +186,13 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW LOCATION</button>
-      {onSave && (
-        <button 
-          type="button" 
-          onClick={onSave} 
-          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
-          title="Сохранить данные в файлы папки data"
-        >
-          💾 СОХРАНИТЬ
-        </button>
-      )}
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} />
-           <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} />
-           <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} />
-           <ConnectionEditor locId={item.id} connections={item.connections} onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }} />
+           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
+           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
+           <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
+           <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} onSave={onSave} />
+           <ConnectionEditor locId={item.id} connections={item.connections} onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }} onSave={onSave} />
         </ListItem>
       ))}
     </div>
@@ -191,26 +204,16 @@ export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerD
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW PLAYER</button>
-      {onSave && (
-        <button 
-          type="button" 
-          onClick={onSave} 
-          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
-          title="Сохранить данные в файлы папки data"
-        >
-          💾 СОХРАНИТЬ
-        </button>
-      )}
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} />
+           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
+           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
            <div className="grid grid-cols-2 gap-2">
-             <InputField label="HP" type="number" value={item.health} onChange={(v: string) => { const n = [...data]; n[i].health = parseInt(v)||0; onChange(n); }} />
-             <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} />
+             <InputField label="HP" type="number" value={item.health} onChange={(v: string) => { const n = [...data]; n[i].health = parseInt(v)||0; onChange(n); }} onSave={onSave} />
+             <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
            </div>
-           <InputField label="Location ID" value={item.locationId} onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }} />
-           <InputField label="Inventory" value={item.inventory.join(', ')} onChange={(v: string) => { const n = [...data]; n[i].inventory = v.split(',').map(s=>s.trim()); onChange(n); }} />
+           <InputField label="Location ID" value={item.locationId} onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }} onSave={onSave} />
+           <InputField label="Inventory" value={item.inventory.join(', ')} onChange={(v: string) => { const n = [...data]; n[i].inventory = v.split(',').map(s=>s.trim()); onChange(n); }} onSave={onSave} />
         </ListItem>
       ))}
     </div>
@@ -222,23 +225,13 @@ export const ObjectsEditor: React.FC<{ data: ObjectData[]; onChange: (d: ObjectD
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
-      {onSave && (
-        <button 
-          type="button" 
-          onClick={onSave} 
-          className="w-full py-2 mb-3 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors"
-          title="Сохранить данные в файлы папки data"
-        >
-          💾 СОХРАНИТЬ
-        </button>
-      )}
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} />
-           <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} />
-           <InputField label="Connected To (ID)" value={item.connectionId} onChange={(v: string) => { const n = [...data]; n[i].connectionId = v; onChange(n); }} />
-           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} />
+           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
+           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
+           <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
+           <InputField label="Connected To (ID)" value={item.connectionId} onChange={(v: string) => { const n = [...data]; n[i].connectionId = v; onChange(n); }} onSave={onSave} />
+           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
         </ListItem>
       ))}
     </div>

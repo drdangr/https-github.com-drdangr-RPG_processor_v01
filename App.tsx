@@ -146,14 +146,8 @@ const App: React.FC = () => {
 
   // Ручное сохранение в файлы
   const handleSaveToFiles = async () => {
-    // Сначала пытаемся сохранить через API
+    // Сохраняем только через API на сервер
     await saveDataToServer(gameState);
-    
-    // Также предлагаем скачать файлы (на случай, если API не работает)
-    if (hasUnsavedChanges) {
-      saveDataFiles(gameState);
-      console.log('[App] 📥 Файлы также скачаны в браузер');
-    }
   };
 
   const toggleTool = (toolName: string) => {
