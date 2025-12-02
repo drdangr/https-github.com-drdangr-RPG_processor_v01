@@ -5,7 +5,7 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "change_object_location",
-    description: "Переместить объект в новую локацию, в инвентарь игрока или внутрь другого объекта.",
+    description: "Переместить объект в новую локацию, передать игроку или поместить внутрь другого объекта.",
     parameters: {
       type: Type.OBJECT,
       properties: {

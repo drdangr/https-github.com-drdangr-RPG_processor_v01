@@ -187,7 +187,7 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
 };
 
 export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
-  const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', health: 100, state: 'OK', inventory: [], locationId: '' }]);
+  const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', health: 100, state: 'OK', locationId: '' }]);
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW PLAYER</button>
@@ -210,7 +210,6 @@ export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerD
              <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} />
            </div>
            <InputField label="Location ID" value={item.locationId} onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }} />
-           <InputField label="Inventory" value={item.inventory.join(', ')} onChange={(v: string) => { const n = [...data]; n[i].inventory = v.split(',').map(s=>s.trim()); onChange(n); }} />
         </ListItem>
       ))}
     </div>

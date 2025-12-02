@@ -21,7 +21,6 @@ export interface PlayerData {
   id: string;
   name: string;
   description: string;
-  inventory: string[]; // Array of Object IDs
   health: number;
   state: string; // e.g., "drunk", "tired"
   locationId: string; // Explicit location tracking
