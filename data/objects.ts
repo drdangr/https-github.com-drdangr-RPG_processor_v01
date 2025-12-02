@@ -19,22 +19,15 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "id": "obj_003",
     "name": "Бутылка виски",
     "description": "Дешевый синтетический алкоголь.",
-    "connectionId": "char_001",
-    "state": "разбита вдребезги, осколки повсюду"
+    "connectionId": "loc_001",
+    "state": "наполовину полная"
   },
   {
     "id": "obj_1764621899013",
     "name": "Статуэтка в виде бюста Наполеона",
     "description": "небольшая гипсовая статуетка в виде бюста Наполеона, в которой обычно спрятан пакетик с травкой",
-    "connectionId": "char_001",
-    "state": "Normal"
-  },
-  {
-    "id": "obj_1764644027967_foh5",
-    "name": "Осколки",
-    "description": "Несколько острых осколков от разбитой бутылки виски.",
-    "connectionId": "char_001",
-    "state": "Острые"
+    "connectionId": "loc_001",
+    "state": "Целый"
   },
   {
     "id": "obj_1764644085541_jv8h",
@@ -44,17 +37,17 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "state": "Запечатан"
   },
   {
-    "id": "obj_1764674346660",
-    "name": "Бутылка с намертво закрытой пробкой",
-    "description": "Круглобокая стеклянная бутылка",
-    "connectionId": "char_001",
-    "state": "Не может быть открыта"
-  },
-  {
     "id": "obj_1764675753500",
     "name": "Ключ",
     "description": "Небольшой ключ",
-    "connectionId": "obj_1764674346660",
+    "connectionId": "obj_1764679535595",
     "state": "Normal"
+  },
+  {
+    "id": "obj_1764679535595",
+    "name": "Круглобокая бутылка",
+    "description": "Закрыта пробкой насмерть",
+    "connectionId": "char_001",
+    "state": "Целая"
   }
 ];
