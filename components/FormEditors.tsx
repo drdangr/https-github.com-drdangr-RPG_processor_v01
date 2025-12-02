@@ -190,6 +190,7 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
            <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
+           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
            <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
            <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} onSave={onSave} />
            <ConnectionEditor locId={item.id} connections={item.connections} onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }} onSave={onSave} />
@@ -208,6 +209,7 @@ export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerD
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
            <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
+           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
            <div className="grid grid-cols-2 gap-2">
              <InputField label="HP" type="number" value={item.health} onChange={(v: string) => { const n = [...data]; n[i].health = parseInt(v)||0; onChange(n); }} onSave={onSave} />
              <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
