@@ -5,7 +5,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "id": "obj_001",
     "name": "Револьвер",
     "description": "Кинетическая ручная шестизарядная пушка крупного калибра. Старая школа. ",
-    "connectionId": "char_001",
+    "connectionId": "char_1764641742185",
     "state": "Полностью заряжен"
   },
   {
@@ -19,14 +19,14 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "id": "obj_003",
     "name": "Бутылка виски",
     "description": "Дешевый синтетический алкоголь.",
-    "connectionId": "loc_001",
-    "state": "Наполовину полон"
+    "connectionId": "char_001",
+    "state": "разбита вдребезги, осколки повсюду"
   },
   {
     "id": "obj_1764621899013",
     "name": "Статуэтка в виде бюста Наполеона",
     "description": "небольшая гипсовая статуетка в виде бюста Наполеона, в которой обычно спрятан пакетик с травкой",
-    "connectionId": "loc_002",
+    "connectionId": "loc_001",
     "state": "Normal"
   }
 ];
