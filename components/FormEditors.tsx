@@ -169,9 +169,22 @@ const ListItem: React.FC<ListItemProps> = ({ id, name, onDelete, children }) => 
   );
 };
 
+// --- Types ---
+
+export interface LocationOption {
+  id: string;
+  name: string;
+}
+
 // --- Editors ---
 
-const ConnectionEditor = ({ locId, connections, onChange, onSave }: { locId: string, connections: LocationData['connections'], onChange: (c: LocationData['connections']) => void, onSave?: () => void }) => {
+const ConnectionEditor = ({ locId, connections, onChange, onSave, availableLocations = [] }: { 
+    locId: string, 
+    connections: LocationData['connections'], 
+    onChange: (c: LocationData['connections']) => void, 
+    onSave?: () => void,
+    availableLocations?: LocationOption[]
+}) => {
     const addConnection = () => {
         onChange([...connections, { targetLocationId: '', type: 'bidirectional' }]);
     };
@@ -186,15 +199,8 @@ const ConnectionEditor = ({ locId, connections, onChange, onSave }: { locId: str
         onChange(connections.filter((_, i) => i !== index));
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        // Ctrl+Enter или Cmd+Enter для сохранения
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            if (onSave) {
-                onSave();
-            }
-        }
-    };
+    // Фильтруем локации: исключаем текущую
+    const filteredLocations = availableLocations.filter(loc => loc.id !== locId);
 
     return (
         <div className="mt-2 p-2 bg-gray-900/50 rounded border border-gray-800">
@@ -204,15 +210,18 @@ const ConnectionEditor = ({ locId, connections, onChange, onSave }: { locId: str
             </div>
             {connections.map((conn, idx) => (
                 <div key={idx} className="flex gap-1 mb-1">
-                    <input 
+                    <select
                         className="flex-1 bg-gray-950 border border-gray-800 text-[10px] px-1 py-1 text-gray-300"
-                        placeholder="Target ID"
                         value={conn.targetLocationId}
                         onChange={(e) => updateConnection(idx, 'targetLocationId', e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        autoComplete="off"
-                        data-lpignore="true"
-                    />
+                    >
+                        <option value="" className="text-gray-500">Выберите локацию...</option>
+                        {filteredLocations.map(loc => (
+                            <option key={loc.id} value={loc.id}>
+                                {loc.name} ({loc.id})
+                            </option>
+                        ))}
+                    </select>
                     <select
                         className="w-16 bg-gray-950 border border-gray-800 text-[10px] text-gray-300"
                         value={conn.type}
@@ -250,15 +259,34 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
            <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
            <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
            <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} onSave={onSave} />
-           <ConnectionEditor locId={item.id} connections={item.connections} onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }} onSave={onSave} />
+           <ConnectionEditor 
+             locId={item.id} 
+             connections={item.connections} 
+             onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }} 
+             onSave={onSave}
+             availableLocations={data.map(loc => ({ id: loc.id, name: loc.name }))}
+           />
         </ListItem>
       ))}
     </div>
   );
 };
 
-export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
+export const PlayersEditor: React.FC<{ 
+  data: PlayerData[]; 
+  onChange: (d: PlayerData[]) => void; 
+  onSave?: () => void;
+  availableLocations?: LocationOption[];
+}> = ({ data, onChange, onSave, availableLocations = [] }) => {
   const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', health: 100, state: 'OK', locationId: '' }]);
+  
+  // Преобразуем локации в опции для SelectField
+  const locationOptions: SelectOption[] = availableLocations.map(loc => ({
+    id: loc.id,
+    label: `${loc.name} (${loc.id})`,
+    group: '📍 Локации'
+  }));
+
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW PLAYER</button>
@@ -271,7 +299,14 @@ export const PlayersEditor: React.FC<{ data: PlayerData[]; onChange: (d: PlayerD
              <InputField label="HP" type="number" value={item.health} onChange={(v: string) => { const n = [...data]; n[i].health = parseInt(v)||0; onChange(n); }} onSave={onSave} />
              <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
            </div>
-           <InputField label="Location ID" value={item.locationId} onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }} onSave={onSave} />
+           <SelectField 
+             label="Location" 
+             value={item.locationId} 
+             onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }} 
+             options={locationOptions}
+             placeholder="Выберите локацию..."
+             onSave={onSave} 
+           />
         </ListItem>
       ))}
     </div>
