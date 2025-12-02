@@ -4,74 +4,173 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_001",
     "name": "Револьвер",
-    "description": "Кинетическая ручная шестизарядная пушка крупного калибра. Старая школа. ",
-    "connectionId": "char_1764641742185",
+    "connectionId": "char_001",
     "attributes": {
-      "condition": "полностью заряжен",
-      "durability": "старый, но надежный"
+      "condition": "заряжен пятью патронами",
+      "durability": "старый, но надежный",
+      "type": "кинетическая ручная пушка",
+      "capacity": "шестизарядная",
+      "caliber": "крупного калибра",
+      "style": "старая школа"
     }
   },
   {
     "id": "obj_002",
     "name": "Датапад",
-    "description": "Стандартный полицейский планшет.",
     "connectionId": "char_001",
     "attributes": {
-      "condition": "разбитый экран, но работает"
+      "condition": "разбитый экран, но работает",
+      "type": "стандартный полицейский планшет"
     }
   },
   {
     "id": "obj_003",
     "name": "Бутылка виски",
-    "description": "Дешевый синтетический алкоголь.",
     "connectionId": "loc_001",
     "attributes": {
-      "condition": "наполовину полная"
+      "condition": "почти пустая",
+      "quality": "дешевый синтетический",
+      "content": "алкоголь"
     }
   },
   {
     "id": "obj_1764621899013",
     "name": "Статуэтка в виде бюста Наполеона",
-    "description": "небольшая гипсовая статуетка в виде бюста Наполеона, в которой обычно спрятан пакетик с травкой",
     "connectionId": "loc_001",
     "attributes": {
-      "condition": "целая"
+      "condition": "целая",
+      "size": "небольшая",
+      "material": "гипсовая",
+      "appearance": "в виде бюста Наполеона",
+      "feature": "внутри обычно спрятан пакетик с травкой"
     }
   },
   {
     "id": "obj_1764644085541_jv8h",
     "name": "Пакетик с травкой",
-    "description": "Небольшой герметичный пакетик с высушенными листьями неизвестного происхождения. Пахнет терпко и сладко.",
     "connectionId": "loc_001",
     "attributes": {
-      "condition": "запечатан"
+      "condition": "запечатан",
+      "size": "небольшой",
+      "sealing": "герметичный",
+      "content": "высушенные листья неизвестного происхождения",
+      "smell": "пахнет терпко и сладко"
     }
   },
   {
     "id": "obj_1764675753500",
     "name": "Ключик",
-    "description": "Небольшой ключ",
     "connectionId": "char_001",
     "attributes": {
-      "condition": "в хорошем состоянии"
+      "condition": "в хорошем состоянии",
+      "size": "небольшой"
     }
   },
   {
     "id": "obj_1764693090407",
     "name": "Сундук",
-    "description": "Сундук с отверстием для ключа",
     "connectionId": "loc_001",
     "attributes": {
-      "condition": "закрыт на ключ"
+      "condition": "закрыт на ключ",
+      "feature": "имеет отверстие для ключа"
     }
   },
   {
     "id": "obj_1764693137423",
     "name": "Ключ от сундука",
-    "description": "Большой ключ",
     "connectionId": "char_1764641742185",
     "attributes": {
-      "condition": "в хорошем состоянии"
+      "condition": "в хорошем состоянии",
+      "size": "большой"
+    }
+  },
+  {
+    "id": "obj_1764712841260",
+    "name": "Модуль реанимации",
+    "connectionId": "loc_001",
+    "attributes": {
+      "technology": "суперсовременный",
+      "capability": "способен творить чудеса с тяжело ранеными"
+    }
+  },
+  {
+    "id": "obj_1764714563883",
+    "name": "Книга полезных заклинаний",
+    "connectionId": "loc_001",
+    "attributes": {
+      "type": "сборник полезных заклинаний",
+      "title": "Заклининания для Dummy"
+    }
+  },
+  {
+    "id": "obj_1764715037332_ozwb",
+    "name": "Яблоко",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "откушено наполовину",
+      "appearance": "наливное красное",
+      "smell": "пахнет свежестью"
+    }
+  },
+  {
+    "id": "obj_1764715037332_eb7i",
+    "name": "Яблоко",
+    "connectionId": "char_1764641742185",
+    "attributes": {
+      "condition": "свежее",
+      "appearance": "наливное красное",
+      "smell": "пахнет свежестью"
+    }
+  },
+  {
+    "id": "obj_1764715586153_3cbk",
+    "name": "Патроны",
+    "connectionId": "loc_001",
+    "attributes": {
+      "condition": "остался один, лежит на столе",
+      "quantity": "шесть",
+      "weight": "тяжелые",
+      "caliber": "крупного калибра"
+    }
+  },
+  {
+    "id": "obj_1764718239437_m975",
+    "name": "Ковбойская шляпа",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертая, но крепкая"
+    }
+  },
+  {
+    "id": "obj_1764718239437_nufq",
+    "name": "Кожаный жилет",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертый, но крепкий"
+    }
+  },
+  {
+    "id": "obj_1764718239437_xovb",
+    "name": "Джинсы",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертые, но крепкие"
+    }
+  },
+  {
+    "id": "obj_1764718477192_7wyh",
+    "name": "Сапог (надетый Джеком)",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертый, но крепкий"
+    }
+  },
+  {
+    "id": "obj_1764718477192_s71y",
+    "name": "Сапог (на столе)",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертый, но крепкий, надетый Джеком"
     }
   }
 ];

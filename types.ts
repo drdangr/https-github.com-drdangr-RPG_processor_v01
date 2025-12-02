@@ -28,7 +28,6 @@ export interface PlayerData {
 export interface ObjectData {
   id: string;
   name: string;
-  description: string;
   connectionId: string; // ID of Player, Location, or other Object
   attributes: Record<string, string>; // Нарративные характеристики объекта
 }

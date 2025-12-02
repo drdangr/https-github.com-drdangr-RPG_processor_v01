@@ -13,10 +13,6 @@ const tool: GameTool = {
           type: Type.STRING, 
           description: "Название объекта (напр. 'Ржавый ключ', 'Записка')." 
         },
-        description: { 
-          type: Type.STRING, 
-          description: "Описание объекта (внешний вид, особенности)." 
-        },
         connectionId: { 
           type: Type.STRING, 
           description: "ID владельца/контейнера: ID игрока (объект у него), ID локации (лежит там), или ID другого объекта (внутри контейнера)." 
@@ -26,17 +22,17 @@ const tool: GameTool = {
           description: "Начальное состояние объекта в виде нарративного описания (напр. 'новый и блестящий', 'почти сломан', 'закрыт на ключ'). По умолчанию 'в хорошем состоянии'." 
         },
       },
-      required: ["name", "description", "connectionId"],
+      required: ["name", "connectionId"],
     },
   },
   apply: (state: GameState, args: any) => {
-    const { name, description, connectionId, condition = "в хорошем состоянии" } = args;
+    const { name, connectionId, condition = "в хорошем состоянии" } = args;
     
     // Валидация обязательных полей
-    if (!name || !description || !connectionId) {
+    if (!name || !connectionId) {
       return { 
         newState: state, 
-        result: `Ошибка: name, description и connectionId обязательны для создания объекта` 
+        result: `Ошибка: name и connectionId обязательны для создания объекта` 
       };
     }
     
@@ -71,7 +67,6 @@ const tool: GameTool = {
     const newObject = {
       id: newId,
       name: name.trim(),
-      description: description.trim(),
       connectionId: connectionId,
       attributes: {
         condition: condition.trim() || "в хорошем состоянии"

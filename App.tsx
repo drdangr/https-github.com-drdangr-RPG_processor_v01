@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const resultsContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleGlobalError = (event: ErrorEvent) => {
@@ -147,6 +148,21 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Автоматический скролл вниз при появлении новых результатов
+  useEffect(() => {
+    if (lastResult && resultsContainerRef.current) {
+      // Небольшая задержка для того, чтобы контент успел отрендериться
+      setTimeout(() => {
+        if (resultsContainerRef.current) {
+          resultsContainerRef.current.scrollTo({
+            top: resultsContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 100);
+    }
+  }, [lastResult]);
+
   // Ручное сохранение в файлы
   const handleSaveToFiles = async () => {
     // Сохраняем только через API на сервер
@@ -202,7 +218,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-200 font-sans selection:bg-purple-500 selection:text-white flex flex-col" data-no-translate>
+    <div className="h-screen bg-gray-950 text-gray-200 font-sans selection:bg-purple-500 selection:text-white flex flex-col overflow-hidden" data-no-translate>
       
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900 px-6 py-4 flex justify-between items-center shadow-md shrink-0">
@@ -232,7 +248,7 @@ const App: React.FC = () => {
       <main className="flex-1 grid grid-cols-12 overflow-hidden">
         
         {/* Left Column: Data Editor */}
-        <section className="col-span-3 border-r border-gray-800 flex flex-col bg-gray-900/50">
+        <section className="col-span-3 border-r border-gray-800 flex flex-col bg-gray-900/50 min-h-0">
           <div className="flex border-b border-gray-800">
             {['world', 'locations', 'players', 'objects'].map((tab) => (
               <button
@@ -249,7 +265,7 @@ const App: React.FC = () => {
               </button>
             ))}
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {activeTab === 'world' && <WorldEditor data={gameState.world} onChange={updateWorld} onSave={handleSaveToFiles} />}
             {activeTab === 'locations' && <LocationsEditor data={gameState.locations} onChange={updateLocations} onSave={handleSaveToFiles} />}
             {activeTab === 'players' && (
@@ -361,7 +377,7 @@ const App: React.FC = () => {
                 <h3 className="text-sm font-bold text-gray-200">Результат симуляции</h3>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div ref={resultsContainerRef} className="flex-1 overflow-y-auto p-4 space-y-6">
                 {!lastResult && !isProcessing && (
                      <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
                         <p className="text-xs uppercase tracking-widest">Ожидание ввода...</p>

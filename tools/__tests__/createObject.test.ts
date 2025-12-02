@@ -16,7 +16,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Новый ключ',
-        description: 'Ржавый ключ от двери',
         connectionId: 'loc_001',
         condition: 'ржавый'
       });
@@ -27,7 +26,6 @@ describe('create_object tool', () => {
       // Проверяем, что объект создан с правильными данными
       const newObject = result.newState.objects.find(o => o.name === 'Новый ключ');
       expect(newObject).toBeDefined();
-      expect(newObject?.description).toBe('Ржавый ключ от двери');
       expect(newObject?.connectionId).toBe('loc_001');
       expect(newObject?.attributes?.condition).toBe('ржавый');
       expect(newObject?.id).toMatch(/^obj_\d+_[a-z0-9]+$/);
@@ -49,7 +47,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Пистолет',
-        description: 'Кольт 45 калибра',
         connectionId: 'char_001'
       });
 
@@ -72,7 +69,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Записка',
-        description: 'Сморщенный листок бумаги',
         connectionId: 'obj_002', // Внутри ящика
         condition: 'помятая'
       });
@@ -93,7 +89,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'loc_001'
         // condition не указан
       });
@@ -110,7 +105,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: '  Предмет с пробелами  ',
-        description: '  Описание с пробелами  ',
         connectionId: 'loc_001',
         condition: '  состояние  '
       });
@@ -121,7 +115,6 @@ describe('create_object tool', () => {
       // Ищем новый объект - он должен быть последним в массиве
       const newObject = result.newState.objects[result.newState.objects.length - 1];
       expect(newObject?.name).toBe('Предмет с пробелами');
-      expect(newObject?.description).toBe('Описание с пробелами');
       expect(newObject?.attributes?.condition).toBe('состояние');
     });
 
@@ -130,13 +123,11 @@ describe('create_object tool', () => {
       
       const result1 = createObject.apply(state, {
         name: 'Объект 1',
-        description: 'Описание 1',
         connectionId: 'loc_001'
       });
 
       const result2 = createObject.apply(result1.newState, {
         name: 'Объект 2',
-        description: 'Описание 2',
         connectionId: 'loc_001'
       });
 
@@ -155,7 +146,6 @@ describe('create_object tool', () => {
       
       createObject.apply(state, {
         name: 'Новый объект',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -172,27 +162,11 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: '',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
       expect(result.newState).toBe(state);
       expect(result.newState.objects.length).toBe(originalObjectsCount);
-      expect(result.result).toContain('обязательны');
-      expect(statesEqual(state, originalState)).toBe(true);
-    });
-
-    test('возвращает ошибку при пустом description', () => {
-      const state = createTestState();
-      const originalState = JSON.parse(JSON.stringify(state));
-      
-      const result = createObject.apply(state, {
-        name: 'Название',
-        description: '',
-        connectionId: 'loc_001'
-      });
-
-      expect(result.newState).toBe(state);
       expect(result.result).toContain('обязательны');
       expect(statesEqual(state, originalState)).toBe(true);
     });
@@ -203,7 +177,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Название',
-        description: 'Описание',
         connectionId: ''
       });
 
@@ -218,22 +191,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: undefined,
-        description: 'Описание',
-        connectionId: 'loc_001'
-      });
-
-      expect(result.newState).toBe(state);
-      expect(result.result).toContain('обязательны');
-      expect(statesEqual(state, originalState)).toBe(true);
-    });
-
-    test('возвращает ошибку при undefined description', () => {
-      const state = createTestState();
-      const originalState = JSON.parse(JSON.stringify(state));
-      
-      const result = createObject.apply(state, {
-        name: 'Название',
-        description: undefined,
         connectionId: 'loc_001'
       });
 
@@ -248,7 +205,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Название',
-        description: 'Описание',
         connectionId: undefined
       });
 
@@ -263,7 +219,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: null,
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -278,7 +233,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Объект',
-        description: 'Описание',
         connectionId: 'nonexistent_999'
       });
 
@@ -297,7 +251,6 @@ describe('create_object tool', () => {
       
       createObject.apply(state, {
         name: '',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -309,7 +262,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Объект',
-        description: 'Описание',
         connectionId: 'nonexistent'
       });
 
@@ -323,7 +275,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Новый объект',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -342,7 +293,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Новый объект',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -357,7 +307,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Уникальный предмет',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -369,7 +318,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -382,7 +330,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'char_001'
       });
 
@@ -395,7 +342,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -408,7 +354,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'obj_002'
       });
 
@@ -421,7 +366,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'loc_001',
         condition: 'сломан'
       });
@@ -437,7 +381,6 @@ describe('create_object tool', () => {
       
       const result = createObject.apply(state, {
         name: longName,
-        description: 'Описание',
         connectionId: 'loc_001'
       });
 
@@ -446,26 +389,11 @@ describe('create_object tool', () => {
       expect(newObject?.name).toBe(longName);
     });
 
-    test('работает с длинным описанием объекта', () => {
-      const state = createTestState();
-      const longDescription = 'Очень длинное описание объекта, которое содержит много информации о его внешнем виде, характеристиках, истории происхождения и других важных деталях, которые могут быть полезны для игроков и ГМ';
-      
-      const result = createObject.apply(state, {
-        name: 'Предмет',
-        description: longDescription,
-        connectionId: 'loc_001'
-      });
-
-      const newObject = result.newState.objects.find(o => o.name === 'Предмет');
-      expect(newObject?.description).toBe(longDescription);
-    });
-
     test('работает с пустой строкой как state (использует значение по умолчанию)', () => {
       const state = createTestState();
       
       const result = createObject.apply(state, {
         name: 'Предмет',
-        description: 'Описание',
         connectionId: 'loc_001',
         condition: ''
       });
@@ -479,13 +407,11 @@ describe('create_object tool', () => {
       
       const result1 = createObject.apply(state, {
         name: 'Объект 1',
-        description: 'Описание 1',
         connectionId: 'loc_001'
       });
 
       const result2 = createObject.apply(result1.newState, {
         name: 'Объект 2',
-        description: 'Описание 2',
         connectionId: 'loc_001'
       });
 

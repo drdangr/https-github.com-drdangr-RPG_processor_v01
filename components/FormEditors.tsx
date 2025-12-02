@@ -399,7 +399,7 @@ export const ObjectsEditor: React.FC<{
   onSave?: () => void;
   connectionTargets?: ConnectionTarget[];
 }> = ({ data, onChange, onSave, connectionTargets = [] }) => {
-  const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', description: '', connectionId: '', attributes: {} }]);
+  const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
   
   // Преобразуем targets в опции для SelectField
   const connectionOptions: SelectOption[] = connectionTargets.map(t => ({
@@ -424,7 +424,6 @@ export const ObjectsEditor: React.FC<{
              placeholder="Выберите владельца/контейнер..."
              onSave={onSave} 
            />
-           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
         </ListItem>
       ))}
     </div>
