@@ -33,7 +33,7 @@ export const processGameTurn = async (
     const toolDefinitions = enabledTools.map(t => t.definition);
     const geminiTools: Tool[] = toolDefinitions.length > 0 ? [{ functionDeclarations: toolDefinitions }] : [];
 
-    const systemInstruction = `
+    const createSystemInstruction = (state: GameState) => `
 Ты - продвинутый ИИ Гейм-Мастер (Ведущий).
 Твоя задача:
 1. Проанализировать текущее состояние мира (JSON) и намерение/действие игрока.
@@ -47,7 +47,7 @@ export const processGameTurn = async (
 - Текст должен быть атмосферным и соответствовать жанру.
 
 ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
-${JSON.stringify(currentState, null, 2)}
+${JSON.stringify(state, null, 2)}
 `;
 
     const modelId = "gemini-2.5-flash"; 
@@ -62,7 +62,7 @@ ${JSON.stringify(currentState, null, 2)}
       model: modelId,
       contents: initialContents,
       config: {
-        systemInstruction: systemInstruction,
+        systemInstruction: createSystemInstruction(currentState),
         tools: geminiTools,
         temperature: 0.7,
       },
@@ -137,7 +137,7 @@ ${JSON.stringify(currentState, null, 2)}
           model: modelId,
           contents: historyContents,
           config: {
-              systemInstruction: systemInstruction,
+              systemInstruction: createSystemInstruction(workingState),
               tools: geminiTools 
           }
       });

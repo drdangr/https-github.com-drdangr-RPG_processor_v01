@@ -16,18 +16,31 @@ const tool: GameTool = {
     },
   },
   apply: (state: GameState, args: any) => {
-    const newState = cloneState(state);
-    const { playerId, newState: newPlayerState } = args;
-    const player = newState.players.find(p => p.id === playerId);
-    let result = "";
-
-    if (player) {
-      player.state = newPlayerState;
-      result = `Состояние игрока ${player.name} (${playerId}) изменено на: ${newPlayerState}`;
-    } else {
-      result = `Ошибка: Игрок ${playerId} не найден`;
+    const { playerId, newState: stateDescription } = args;
+    
+    // Валидация пустых значений
+    if (!playerId || !stateDescription) {
+      return { 
+        newState: state, 
+        result: `Ошибка: playerId и newState обязательны` 
+      };
     }
-    return { newState, result };
+    
+    const clonedState = cloneState(state);
+    const player = clonedState.players.find(p => p.id === playerId);
+    
+    if (!player) {
+      return { 
+        newState: state, 
+        result: `Ошибка: Игрок "${playerId}" не найден` 
+      };
+    }
+    
+    player.state = stateDescription;
+    return { 
+      newState: clonedState, 
+      result: `Состояние игрока "${player.name}" изменено на: "${stateDescription}"` 
+    };
   }
 };
 

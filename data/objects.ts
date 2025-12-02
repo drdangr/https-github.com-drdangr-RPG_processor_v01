@@ -5,7 +5,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "id": "obj_001",
     "name": "Револьвер",
     "description": "Кинетическая ручная шестизарядная пушка крупного калибра. Старая школа. ",
-    "connectionId": "char_001",
+    "connectionId": "loc_001",
     "state": "Полностью заряжен"
   },
   {

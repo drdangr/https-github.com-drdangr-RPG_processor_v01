@@ -16,18 +16,31 @@ const tool: GameTool = {
     },
   },
   apply: (state: GameState, args: any) => {
-    const newState = cloneState(state);
-    const { locationId, newState: newLocState } = args;
-    const loc = newState.locations.find(l => l.id === locationId);
-    let result = "";
-
-    if (loc) {
-      loc.state = newLocState;
-      result = `Состояние локации ${loc.name} (${locationId}) изменено на: ${newLocState}`;
-    } else {
-      result = `Ошибка: Локация ${locationId} не найдена`;
+    const { locationId, newState: stateDescription } = args;
+    
+    // Валидация пустых значений
+    if (!locationId || !stateDescription) {
+      return { 
+        newState: state, 
+        result: `Ошибка: locationId и newState обязательны` 
+      };
     }
-    return { newState, result };
+    
+    const clonedState = cloneState(state);
+    const loc = clonedState.locations.find(l => l.id === locationId);
+    
+    if (!loc) {
+      return { 
+        newState: state, 
+        result: `Ошибка: Локация "${locationId}" не найдена` 
+      };
+    }
+    
+    loc.state = stateDescription;
+    return { 
+      newState: clonedState, 
+      result: `Состояние локации "${loc.name}" изменено на: "${stateDescription}"` 
+    };
   }
 };
 

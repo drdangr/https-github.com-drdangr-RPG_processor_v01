@@ -16,18 +16,31 @@ const tool: GameTool = {
     },
   },
   apply: (state: GameState, args: any) => {
-    const newState = cloneState(state);
-    const { objectId, newState: newObjState } = args;
-    const obj = newState.objects.find(o => o.id === objectId);
-    let result = "";
-
-    if (obj) {
-      obj.state = newObjState;
-      result = `Состояние объекта ${obj.name} (${objectId}) изменено на: ${newObjState}`;
-    } else {
-      result = `Ошибка: Объект ${objectId} не найден`;
+    const { objectId, newState: stateDescription } = args;
+    
+    // Валидация пустых значений
+    if (!objectId || !stateDescription) {
+      return { 
+        newState: state, 
+        result: `Ошибка: objectId и newState обязательны` 
+      };
     }
-    return { newState, result };
+    
+    const clonedState = cloneState(state);
+    const obj = clonedState.objects.find(o => o.id === objectId);
+    
+    if (!obj) {
+      return { 
+        newState: state, 
+        result: `Ошибка: Объект "${objectId}" не найден` 
+      };
+    }
+    
+    obj.state = stateDescription;
+    return { 
+      newState: clonedState, 
+      result: `Состояние объекта "${obj.name}" изменено на: "${stateDescription}"` 
+    };
   }
 };
 
