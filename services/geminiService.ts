@@ -1,5 +1,6 @@
 import { GoogleGenAI, Tool, Content, Part } from "@google/genai";
 import { GameState, SimulationResult, ToolCallLog, GameTool } from "../types";
+import { normalizeState } from "../utils/gameUtils";
 
 export const processGameTurn = async (
   currentState: GameState,
@@ -33,7 +34,10 @@ export const processGameTurn = async (
     const toolDefinitions = enabledTools.map(t => t.definition);
     const geminiTools: Tool[] = toolDefinitions.length > 0 ? [{ functionDeclarations: toolDefinitions }] : [];
 
-    const createSystemInstruction = (state: GameState) => `
+    const createSystemInstruction = (state: GameState) => {
+      // Нормализуем состояние перед сериализацией - гарантируем наличие attributes
+      const normalizedState = normalizeState(state);
+      return `
 Ты - продвинутый ИИ Гейм-Мастер (Ведущий).
 Твоя задача:
 1. Проанализировать текущее состояние мира (JSON) и намерение/действие игрока.
@@ -47,8 +51,9 @@ export const processGameTurn = async (
 - Текст должен быть атмосферным и соответствовать жанру.
 
 ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
-${JSON.stringify(state, null, 2)}
+${JSON.stringify(normalizedState, null, 2)}
 `;
+    };
 
     const modelId = "gemini-2.5-flash"; 
 

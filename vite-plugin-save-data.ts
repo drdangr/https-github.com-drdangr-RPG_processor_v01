@@ -2,6 +2,7 @@ import type { Plugin } from 'vite';
 import fs from 'fs';
 import path from 'path';
 import { GameState } from './types';
+import { normalizeState } from './utils/gameUtils';
 
 export function saveDataPlugin(): Plugin {
   return {
@@ -21,7 +22,9 @@ export function saveDataPlugin(): Plugin {
 
         req.on('end', async () => {
           try {
-            const gameState: GameState = JSON.parse(body);
+            const parsedState: GameState = JSON.parse(body);
+            // Нормализуем состояние - гарантируем наличие attributes у всех сущностей
+            const gameState = normalizeState(parsedState);
             const dataDir = path.resolve(__dirname, 'data');
 
             // Убеждаемся, что папка data существует

@@ -6,6 +6,7 @@ import { processGameTurn } from './services/geminiService';
 import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor, ConnectionTarget, LocationOption } from './components/FormEditors';
 import DiffView from './components/DiffView';
 import { saveDataFiles } from './utils/dataExporter';
+import { normalizeState } from './utils/gameUtils';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
@@ -136,6 +137,8 @@ const App: React.FC = () => {
         // Проверяем, что данные валидны
         if (parsed.world && parsed.locations && parsed.players && parsed.objects) {
           console.log('[App] Найдены сохраненные данные в localStorage');
+          // Нормализуем состояние - гарантируем наличие attributes
+          const normalized = normalizeState(parsed as GameState);
           // Не перезаписываем автоматически, только если пользователь хочет
         }
       }

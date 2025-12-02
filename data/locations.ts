@@ -6,25 +6,44 @@ export const INITIAL_LOCATIONS: LocationData[] = [
     "name": "Офис детектива",
     "description": "Тесный, прокуренный офис с жалюзи, которые не открывались годами.",
     "currentSituation": "Тихо, пылинки танцуют в свете мерцающей неоновой вывески снаружи.",
-    "state": "Беспорядок после недавней драки",
     "connections": [
       {
         "targetLocationId": "loc_002",
         "type": "out"
       }
-    ]
+    ],
+    "attributes": {
+      "state": "беспорядок после недавней драки",
+      "safety": "относительно безопасно"
+    }
   },
   {
     "id": "loc_002",
     "name": "Улица: Хромовая Аллея",
     "description": "Мокрая мощеная улица, отражающая голографическую рекламу сверху.",
     "currentSituation": "Оживленное движение зависимых от имплантов.",
-    "state": "Скользко от кислотного дождя",
     "connections": [
       {
         "targetLocationId": "loc_001",
         "type": "in"
       }
-    ]
+    ],
+    "attributes": {
+      "state": "скользко от кислотного дождя",
+      "safety": "опасно, стоит быть настороже"
+    }
+  },
+  {
+    "id": "loc_1764698263182",
+    "name": "Библиотека",
+    "description": "Старая библиотека с кучей книг.",
+    "currentSituation": "Очень тихо в воздухе  пыль.",
+    "connections": [
+      {
+        "targetLocationId": "loc_002",
+        "type": "bidirectional"
+      }
+    ],
+    "attributes": {}
   }
 ];

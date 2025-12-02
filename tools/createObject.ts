@@ -21,16 +21,16 @@ const tool: GameTool = {
           type: Type.STRING, 
           description: "ID владельца/контейнера: ID игрока (объект у него), ID локации (лежит там), или ID другого объекта (внутри контейнера)." 
         },
-        state: { 
+        condition: { 
           type: Type.STRING, 
-          description: "Начальное состояние объекта (напр. 'новый', 'сломан', 'закрыт'). По умолчанию 'обычное'." 
+          description: "Начальное состояние объекта в виде нарративного описания (напр. 'новый и блестящий', 'почти сломан', 'закрыт на ключ'). По умолчанию 'в хорошем состоянии'." 
         },
       },
       required: ["name", "description", "connectionId"],
     },
   },
   apply: (state: GameState, args: any) => {
-    const { name, description, connectionId, state: objectState = "обычное" } = args;
+    const { name, description, connectionId, condition = "в хорошем состоянии" } = args;
     
     // Валидация обязательных полей
     if (!name || !description || !connectionId) {
@@ -73,7 +73,9 @@ const tool: GameTool = {
       name: name.trim(),
       description: description.trim(),
       connectionId: connectionId,
-      state: objectState.trim() || "обычное"
+      attributes: {
+        condition: condition.trim() || "в хорошем состоянии"
+      }
     };
     
     // Добавление в массив объектов
@@ -91,7 +93,7 @@ const tool: GameTool = {
     
     return { 
       newState: clonedState, 
-      result: `Создан новый объект "${name}" (${newId}) ${locationInfo}. Состояние: "${objectState}".` 
+      result: `Создан новый объект "${name}" (${newId}) ${locationInfo}. Состояние: "${condition}".` 
     };
   }
 };

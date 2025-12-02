@@ -10,20 +10,19 @@ export interface LocationData {
   name: string;
   description: string;
   currentSituation: string;
-  state: string; // Dynamic state (e.g., "quiet", "crowded")
   connections: Array<{
     targetLocationId: string;
     type: 'in' | 'out' | 'bidirectional';
   }>;
+  attributes: Record<string, string>; // Нарративные характеристики локации
 }
 
 export interface PlayerData {
   id: string;
   name: string;
   description: string;
-  health: number;
-  state: string; // e.g., "drunk", "tired"
   locationId: string; // Explicit location tracking
+  attributes: Record<string, string>; // Нарративные характеристики игрока
 }
 
 export interface ObjectData {
@@ -31,7 +30,7 @@ export interface ObjectData {
   name: string;
   description: string;
   connectionId: string; // ID of Player, Location, or other Object
-  state: string; // e.g., "broken", "working"
+  attributes: Record<string, string>; // Нарративные характеристики объекта
 }
 
 export interface GameState {

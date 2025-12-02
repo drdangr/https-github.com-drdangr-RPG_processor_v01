@@ -97,6 +97,83 @@ const SelectField = ({ label, value, onChange, options, placeholder = "Выбе�
   );
 };
 
+const AttributesEditor = ({ attributes, onChange, onSave }: { attributes: Record<string, string>, onChange: (attrs: Record<string, string>) => void, onSave?: () => void }) => {
+  const [newKey, setNewKey] = useState('');
+  const [newValue, setNewValue] = useState('');
+
+  const handleAdd = () => {
+    if (newKey.trim() && newValue.trim()) {
+      onChange({ ...attributes, [newKey.trim()]: newValue.trim() });
+      setNewKey('');
+      setNewValue('');
+    }
+  };
+
+  const handleDelete = (key: string) => {
+    const newAttrs = { ...attributes };
+    delete newAttrs[key];
+    onChange(newAttrs);
+  };
+
+  const handleUpdate = (key: string, value: string) => {
+    onChange({ ...attributes, [key]: value });
+  };
+
+  return (
+    <div className="mb-3">
+      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">Attributes</label>
+      <div className="border border-gray-800 rounded p-2 bg-gray-900">
+        {Object.entries(attributes || {}).map(([key, value]) => (
+          <div key={key} className="mb-2 last:mb-0 flex gap-2 items-start">
+            <div className="flex-1">
+              <div className="text-[10px] text-gray-400 mb-1">{key}</div>
+              <TextAreaField
+                label=""
+                value={value}
+                onChange={(v: string) => handleUpdate(key, v)}
+                rows={2}
+                onSave={onSave}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDelete(key)}
+              className="mt-5 px-2 py-1 text-xs text-red-400 hover:text-red-300 border border-red-800 rounded hover:border-red-700"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div className="mt-2 pt-2 border-t border-gray-800">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <InputField
+              label="Название"
+              value={newKey}
+              onChange={setNewKey}
+              placeholder="health, condition..."
+              onSave={onSave}
+            />
+            <InputField
+              label="Значение"
+              value={newValue}
+              onChange={setNewValue}
+              placeholder="ранен, но может продолжать..."
+              onSave={onSave}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleAdd}
+            className="w-full py-1 text-xs text-gray-400 hover:text-gray-300 border border-gray-700 rounded hover:border-gray-600"
+          >
+            + Добавить атрибут
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TextAreaField = ({ label, value, onChange, rows = 3, name, id, onSave }: any) => {
     const finalId = id || `text_${Math.random().toString(36).substr(2, 9)}`;
     const finalName = name || `area_${Math.random().toString(36).substr(2, 9)}`;
@@ -248,7 +325,7 @@ export const WorldEditor: React.FC<{ data: WorldData; onChange: (d: WorldData) =
 };
 
 export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: LocationData[]) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
-  const add = () => onChange([...data, { id: `loc_${Date.now()}`, name: 'New Loc', description: '', currentSituation: '', state: 'Normal', connections: [] }]);
+  const add = () => onChange([...data, { id: `loc_${Date.now()}`, name: 'New Loc', description: '', currentSituation: '', connections: [], attributes: {} }]);
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW LOCATION</button>
@@ -257,8 +334,8 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
            <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
            <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
-           <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
            <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} onSave={onSave} />
+           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
            <ConnectionEditor 
              locId={item.id} 
              connections={item.connections} 
@@ -278,7 +355,7 @@ export const PlayersEditor: React.FC<{
   onSave?: () => void;
   availableLocations?: LocationOption[];
 }> = ({ data, onChange, onSave, availableLocations = [] }) => {
-  const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', health: 100, state: 'OK', locationId: '' }]);
+  const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', locationId: '', attributes: {} }]);
   
   // Преобразуем локации в опции для SelectField
   const locationOptions: SelectOption[] = availableLocations.map(loc => ({
@@ -295,10 +372,7 @@ export const PlayersEditor: React.FC<{
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
            <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
            <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
-           <div className="grid grid-cols-2 gap-2">
-             <InputField label="HP" type="number" value={item.health} onChange={(v: string) => { const n = [...data]; n[i].health = parseInt(v)||0; onChange(n); }} onSave={onSave} />
-             <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
-           </div>
+           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
            <SelectField 
              label="Location" 
              value={item.locationId} 
@@ -325,7 +399,7 @@ export const ObjectsEditor: React.FC<{
   onSave?: () => void;
   connectionTargets?: ConnectionTarget[];
 }> = ({ data, onChange, onSave, connectionTargets = [] }) => {
-  const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', description: '', connectionId: '', state: 'Normal' }]);
+  const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', description: '', connectionId: '', attributes: {} }]);
   
   // Преобразуем targets в опции для SelectField
   const connectionOptions: SelectOption[] = connectionTargets.map(t => ({
@@ -341,7 +415,7 @@ export const ObjectsEditor: React.FC<{
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
            <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
            <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
-           <InputField label="State" value={item.state} onChange={(v: string) => { const n = [...data]; n[i].state = v; onChange(n); }} onSave={onSave} />
+           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
            <SelectField 
              label="Connected To" 
              value={item.connectionId} 

@@ -15,8 +15,10 @@ export function createTestState(): GameState {
         name: 'Офис',
         description: 'Тестовый офис',
         currentSituation: 'Тихо',
-        state: 'Normal',
-        connections: []
+        connections: [],
+        attributes: {
+          state: 'нормальное состояние'
+        }
       }
     ],
     players: [
@@ -24,9 +26,11 @@ export function createTestState(): GameState {
         id: 'char_001',
         name: 'Тестовый игрок',
         description: 'Описание игрока',
-        health: 100,
-        state: 'OK',
-        locationId: 'loc_001'
+        locationId: 'loc_001',
+        attributes: {
+          health: 'в хорошей форме',
+          condition: 'готов к действию'
+        }
       }
     ],
     objects: [
@@ -35,7 +39,9 @@ export function createTestState(): GameState {
         name: 'Тестовый объект',
         description: 'Описание объекта',
         connectionId: 'loc_001',
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       }
     ]
   };
@@ -57,26 +63,30 @@ export function createExtendedTestState(): GameState {
         name: 'Офис',
         description: 'Тестовый офис',
         currentSituation: 'Тихо',
-        state: 'Normal',
         connections: [
           {
             targetLocationId: 'loc_002',
             type: 'out'
           }
-        ]
+        ],
+        attributes: {
+          state: 'нормальное состояние'
+        }
       },
       {
         id: 'loc_002',
         name: 'Улица',
         description: 'Тестовая улица',
         currentSituation: 'Шумно',
-        state: 'Normal',
         connections: [
           {
             targetLocationId: 'loc_001',
             type: 'in'
           }
-        ]
+        ],
+        attributes: {
+          state: 'нормальное состояние'
+        }
       }
     ],
     players: [
@@ -84,17 +94,21 @@ export function createExtendedTestState(): GameState {
         id: 'char_001',
         name: 'Игрок 1',
         description: 'Первый игрок',
-        health: 100,
-        state: 'OK',
-        locationId: 'loc_001'
+        locationId: 'loc_001',
+        attributes: {
+          health: 'в хорошей форме',
+          condition: 'готов к действию'
+        }
       },
       {
         id: 'char_002',
         name: 'Игрок 2',
         description: 'Второй игрок',
-        health: 80,
-        state: 'Устал',
-        locationId: 'loc_002'
+        locationId: 'loc_002',
+        attributes: {
+          health: 'устал, но может продолжать',
+          condition: 'устал'
+        }
       }
     ],
     objects: [
@@ -103,28 +117,36 @@ export function createExtendedTestState(): GameState {
         name: 'Револьвер',
         description: 'Оружие',
         connectionId: 'char_001',
-        state: 'Заряжен'
+        attributes: {
+          condition: 'заряжен'
+        }
       },
       {
         id: 'obj_002',
         name: 'Ящик',
         description: 'Контейнер',
         connectionId: 'loc_001',
-        state: 'Закрыт'
+        attributes: {
+          condition: 'закрыт'
+        }
       },
       {
         id: 'obj_003',
         name: 'Ключ',
         description: 'Ключ от ящика',
         connectionId: 'obj_002',
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       },
       {
         id: 'obj_004',
         name: 'Документ',
         description: 'Важный документ',
         connectionId: 'loc_002',
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       }
     ]
   };
@@ -145,8 +167,10 @@ export function createCyclicTestState(): GameState {
         name: 'Офис',
         description: 'Тестовый офис',
         currentSituation: 'Тихо',
-        state: 'Normal',
-        connections: []
+        connections: [],
+        attributes: {
+          state: 'нормальное состояние'
+        }
       }
     ],
     players: [
@@ -154,9 +178,11 @@ export function createCyclicTestState(): GameState {
         id: 'char_001',
         name: 'Игрок',
         description: 'Тестовый игрок',
-        health: 100,
-        state: 'OK',
-        locationId: 'loc_001'
+        locationId: 'loc_001',
+        attributes: {
+          health: 'в хорошей форме',
+          condition: 'готов к действию'
+        }
       }
     ],
     objects: [
@@ -165,35 +191,45 @@ export function createCyclicTestState(): GameState {
         name: 'Ящик A',
         description: 'Первый ящик',
         connectionId: 'obj_002', // A находится в B
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       },
       {
         id: 'obj_002',
         name: 'Ящик B',
         description: 'Второй ящик',
         connectionId: 'obj_001', // B находится в A - прямая цикличность
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       },
       {
         id: 'obj_003',
         name: 'Ящик C',
         description: 'Третий ящик',
         connectionId: 'obj_004', // C в D
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       },
       {
         id: 'obj_004',
         name: 'Ящик D',
         description: 'Четвертый ящик',
         connectionId: 'obj_005', // D в E
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       },
       {
         id: 'obj_005',
         name: 'Ящик E',
         description: 'Пятый ящик',
         connectionId: 'obj_003', // E в C - косвенная цикличность
-        state: 'Normal'
+        attributes: {
+          condition: 'в хорошем состоянии'
+        }
       }
     ]
   };

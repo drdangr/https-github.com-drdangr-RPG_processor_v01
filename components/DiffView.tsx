@@ -17,16 +17,22 @@ const DiffView: React.FC<DiffViewProps> = ({ oldState, newState }) => {
       if (!oldObj) {
         changes.push(<div key={`new-obj-${newObj.id}`} className="text-green-400">+ New Object: {newObj.name}</div>);
       } else {
-        if (oldObj.state !== newObj.state) {
-          changes.push(
-            <div key={`obj-state-${newObj.id}`} className="mb-1">
-              <span className="text-blue-400 font-bold">Object {newObj.name} State:</span> 
-              <span className="text-red-400 line-through mx-2">{oldObj.state}</span>
-              <span className="text-gray-500">→</span>
-              <span className="text-green-400 mx-2">{newObj.state}</span>
-            </div>
-          );
-        }
+        // Compare attributes
+        const oldAttrs = oldObj.attributes || {};
+        const newAttrs = newObj.attributes || {};
+        const allAttrKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
+        allAttrKeys.forEach(attrKey => {
+          if (oldAttrs[attrKey] !== newAttrs[attrKey]) {
+            changes.push(
+              <div key={`obj-attr-${newObj.id}-${attrKey}`} className="mb-1">
+                <span className="text-blue-400 font-bold">Object {newObj.name} {attrKey}:</span> 
+                <span className="text-red-400 line-through mx-2">{oldAttrs[attrKey] || '(нет)'}</span>
+                <span className="text-gray-500">→</span>
+                <span className="text-green-400 mx-2">{newAttrs[attrKey] || '(нет)'}</span>
+              </div>
+            );
+          }
+        });
         if (oldObj.connectionId !== newObj.connectionId) {
            changes.push(
             <div key={`obj-loc-${newObj.id}`} className="mb-1">
@@ -43,30 +49,46 @@ const DiffView: React.FC<DiffViewProps> = ({ oldState, newState }) => {
     // Compare Players
     newState.players.forEach(newPl => {
       const oldPl = oldState.players.find(p => p.id === newPl.id);
-      if(oldPl && oldPl.state !== newPl.state) {
-        changes.push(
-            <div key={`pl-state-${newPl.id}`} className="mb-1">
-              <span className="text-yellow-400 font-bold">Player {newPl.name} State:</span> 
-              <span className="text-red-400 line-through mx-2">{oldPl.state}</span>
-              <span className="text-gray-500">→</span>
-              <span className="text-green-400 mx-2">{newPl.state}</span>
-            </div>
-          );
+      if (oldPl) {
+        // Compare attributes
+        const oldAttrs = oldPl.attributes || {};
+        const newAttrs = newPl.attributes || {};
+        const allAttrKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
+        allAttrKeys.forEach(attrKey => {
+          if (oldAttrs[attrKey] !== newAttrs[attrKey]) {
+            changes.push(
+              <div key={`pl-attr-${newPl.id}-${attrKey}`} className="mb-1">
+                <span className="text-yellow-400 font-bold">Player {newPl.name} {attrKey}:</span> 
+                <span className="text-red-400 line-through mx-2">{oldAttrs[attrKey] || '(нет)'}</span>
+                <span className="text-gray-500">→</span>
+                <span className="text-green-400 mx-2">{newAttrs[attrKey] || '(нет)'}</span>
+              </div>
+            );
+          }
+        });
       }
     });
 
     // Compare Locations
     newState.locations.forEach(newLoc => {
         const oldLoc = oldState.locations.find(l => l.id === newLoc.id);
-        if(oldLoc && oldLoc.state !== newLoc.state) {
-          changes.push(
-              <div key={`loc-state-${newLoc.id}`} className="mb-1">
-                <span className="text-purple-400 font-bold">Location {newLoc.name} State:</span> 
-                <span className="text-red-400 line-through mx-2">{oldLoc.state}</span>
-                <span className="text-gray-500">→</span>
-                <span className="text-green-400 mx-2">{newLoc.state}</span>
-              </div>
-            );
+        if (oldLoc) {
+          // Compare attributes
+          const oldAttrs = oldLoc.attributes || {};
+          const newAttrs = newLoc.attributes || {};
+          const allAttrKeys = new Set([...Object.keys(oldAttrs), ...Object.keys(newAttrs)]);
+          allAttrKeys.forEach(attrKey => {
+            if (oldAttrs[attrKey] !== newAttrs[attrKey]) {
+              changes.push(
+                <div key={`loc-attr-${newLoc.id}-${attrKey}`} className="mb-1">
+                  <span className="text-purple-400 font-bold">Location {newLoc.name} {attrKey}:</span> 
+                  <span className="text-red-400 line-through mx-2">{oldAttrs[attrKey] || '(нет)'}</span>
+                  <span className="text-gray-500">→</span>
+                  <span className="text-green-400 mx-2">{newAttrs[attrKey] || '(нет)'}</span>
+                </div>
+              );
+            }
+          });
         }
       });
 

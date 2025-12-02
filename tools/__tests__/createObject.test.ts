@@ -18,7 +18,7 @@ describe('create_object tool', () => {
         name: 'Новый ключ',
         description: 'Ржавый ключ от двери',
         connectionId: 'loc_001',
-        state: 'ржавый'
+        condition: 'ржавый'
       });
 
       // Проверяем, что объект добавлен
@@ -29,7 +29,7 @@ describe('create_object tool', () => {
       expect(newObject).toBeDefined();
       expect(newObject?.description).toBe('Ржавый ключ от двери');
       expect(newObject?.connectionId).toBe('loc_001');
-      expect(newObject?.state).toBe('ржавый');
+      expect(newObject?.attributes?.condition).toBe('ржавый');
       expect(newObject?.id).toMatch(/^obj_\d+_[a-z0-9]+$/);
       
       // Проверяем сообщение
@@ -58,7 +58,7 @@ describe('create_object tool', () => {
       const newObject = result.newState.objects.find(o => o.name === 'Пистолет');
       expect(newObject).toBeDefined();
       expect(newObject?.connectionId).toBe('char_001');
-      expect(newObject?.state).toBe('обычное'); // Значение по умолчанию
+      expect(newObject?.attributes?.condition).toBe('в хорошем состоянии'); // Значение по умолчанию
       
       expect(result.result).toContain('у игрока');
       expect(result.result).toContain('Тестовый игрок');
@@ -74,7 +74,7 @@ describe('create_object tool', () => {
         name: 'Записка',
         description: 'Сморщенный листок бумаги',
         connectionId: 'obj_002', // Внутри ящика
-        state: 'помятая'
+        condition: 'помятая'
       });
 
       expect(result.newState.objects.length).toBe(originalObjectsCount + 1);
@@ -95,12 +95,12 @@ describe('create_object tool', () => {
         name: 'Предмет',
         description: 'Описание',
         connectionId: 'loc_001'
-        // state не указан
+        // condition не указан
       });
 
       const newObject = result.newState.objects.find(o => o.name === 'Предмет');
-      expect(newObject?.state).toBe('обычное');
-      expect(result.result).toContain('обычное');
+      expect(newObject?.attributes?.condition).toBe('в хорошем состоянии');
+      expect(result.result).toContain('в хорошем состоянии');
     });
 
     test('обрезает пробелы в начале и конце строк', () => {
@@ -112,7 +112,7 @@ describe('create_object tool', () => {
         name: '  Предмет с пробелами  ',
         description: '  Описание с пробелами  ',
         connectionId: 'loc_001',
-        state: '  состояние  '
+        condition: '  состояние  '
       });
 
       // Проверяем, что объект добавлен
@@ -122,7 +122,7 @@ describe('create_object tool', () => {
       const newObject = result.newState.objects[result.newState.objects.length - 1];
       expect(newObject?.name).toBe('Предмет с пробелами');
       expect(newObject?.description).toBe('Описание с пробелами');
-      expect(newObject?.state).toBe('состояние');
+      expect(newObject?.attributes?.condition).toBe('состояние');
     });
 
     test('генерирует уникальный ID для каждого объекта', () => {
@@ -423,7 +423,7 @@ describe('create_object tool', () => {
         name: 'Предмет',
         description: 'Описание',
         connectionId: 'loc_001',
-        state: 'сломан'
+        condition: 'сломан'
       });
 
       expect(result.result).toContain('сломан');
@@ -467,11 +467,11 @@ describe('create_object tool', () => {
         name: 'Предмет',
         description: 'Описание',
         connectionId: 'loc_001',
-        state: ''
+        condition: ''
       });
 
       const newObject = result.newState.objects.find(o => o.name === 'Предмет');
-      expect(newObject?.state).toBe('обычное');
+      expect(newObject?.attributes?.condition).toBe('в хорошем состоянии');
     });
 
     test('может создать несколько объектов в одной локации', () => {
