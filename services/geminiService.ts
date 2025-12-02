@@ -239,16 +239,9 @@ ${JSON.stringify(state, null, 2)}
             console.log("[Service] ✓ Используем result2.text напрямую");
             narrative = result2.text;
           } else {
-            // Попробуем извлечь из candidates напрямую
-            const candidateText = result2.candidates[0].text;
-            if (candidateText && candidateText.trim()) {
-              console.log("[Service] ✓ Используем result2.candidates[0].text");
-              narrative = candidateText;
-            } else {
-              console.warn("[Service] ❌ Не удалось извлечь текст ни одним способом");
-              console.log("[Service] Полная структура result2.candidates[0]:", JSON.stringify(result2.candidates[0], null, 2).substring(0, 1000));
-              narrative = "Действие обработано (Повествование не сгенерировано).";
-            }
+            console.warn("[Service] ❌ Не удалось извлечь текст ни одним способом");
+            console.log("[Service] Полная структура result2.candidates[0]:", JSON.stringify(result2.candidates[0], null, 2).substring(0, 1000));
+            narrative = "Действие обработано (Повествование не сгенерировано).";
           }
         }
       } else {
