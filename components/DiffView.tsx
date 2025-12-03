@@ -25,19 +25,19 @@ const DiffView: React.FC<DiffViewProps> = ({ oldState, newState }) => {
         allAttrKeys.forEach(attrKey => {
           if (oldAttrs[attrKey] !== newAttrs[attrKey]) {
             const isDeleted = oldAttrs[attrKey] !== undefined && newAttrs[attrKey] === undefined;
-            changes.push(
+          changes.push(
               <div key={`obj-attr-${newObj.id}-${attrKey}`} className="mb-1">
                 <span className="text-blue-400 font-bold">Object {newObj.name} {attrKey}:</span> 
                 <span className="text-red-400 line-through mx-2">{oldAttrs[attrKey] || '(нет)'}</span>
-                <span className="text-gray-500">→</span>
+              <span className="text-gray-500">→</span>
                 {isDeleted ? (
                   <span className="text-red-500 mx-2 font-bold">[УДАЛЕНО]</span>
                 ) : (
                   <span className="text-green-400 mx-2">{newAttrs[attrKey] || '(нет)'}</span>
                 )}
-              </div>
-            );
-          }
+            </div>
+          );
+        }
         });
         if (oldObj.connectionId !== newObj.connectionId) {
            changes.push(
@@ -71,18 +71,18 @@ const DiffView: React.FC<DiffViewProps> = ({ oldState, newState }) => {
         allAttrKeys.forEach(attrKey => {
           if (oldAttrs[attrKey] !== newAttrs[attrKey]) {
             const isDeleted = oldAttrs[attrKey] !== undefined && newAttrs[attrKey] === undefined;
-            changes.push(
+        changes.push(
               <div key={`pl-attr-${newPl.id}-${attrKey}`} className="mb-1">
                 <span className="text-yellow-400 font-bold">Player {newPl.name} {attrKey}:</span> 
                 <span className="text-red-400 line-through mx-2">{oldAttrs[attrKey] || '(нет)'}</span>
-                <span className="text-gray-500">→</span>
+              <span className="text-gray-500">→</span>
                 {isDeleted ? (
                   <span className="text-red-500 mx-2 font-bold">[УДАЛЕНО]</span>
                 ) : (
                   <span className="text-green-400 mx-2">{newAttrs[attrKey] || '(нет)'}</span>
                 )}
-              </div>
-            );
+            </div>
+          );
           }
         });
       }
@@ -107,18 +107,18 @@ const DiffView: React.FC<DiffViewProps> = ({ oldState, newState }) => {
           allAttrKeys.forEach(attrKey => {
             if (oldAttrs[attrKey] !== newAttrs[attrKey]) {
               const isDeleted = oldAttrs[attrKey] !== undefined && newAttrs[attrKey] === undefined;
-              changes.push(
+          changes.push(
                 <div key={`loc-attr-${newLoc.id}-${attrKey}`} className="mb-1">
                   <span className="text-purple-400 font-bold">Location {newLoc.name} {attrKey}:</span> 
                   <span className="text-red-400 line-through mx-2">{oldAttrs[attrKey] || '(нет)'}</span>
-                  <span className="text-gray-500">→</span>
+                <span className="text-gray-500">→</span>
                   {isDeleted ? (
                     <span className="text-red-500 mx-2 font-bold">[УДАЛЕНО]</span>
                   ) : (
                     <span className="text-green-400 mx-2">{newAttrs[attrKey] || '(нет)'}</span>
                   )}
-                </div>
-              );
+              </div>
+            );
             }
           });
         }
@@ -129,8 +129,8 @@ const DiffView: React.FC<DiffViewProps> = ({ oldState, newState }) => {
       const newLoc = newState.locations.find(l => l.id === oldLoc.id);
       if (!newLoc) {
         changes.push(<div key={`deleted-location-${oldLoc.id}`} className="text-red-500">- Deleted Location: {oldLoc.name}</div>);
-      }
-    });
+        }
+      });
 
     if (changes.length === 0) {
       return <div className="text-gray-500 italic">No structural data changes detected.</div>;

@@ -985,17 +985,17 @@ const App: React.FC = () => {
                                                     </div>
                                                 )}
                                                 <div className="text-xs bg-black rounded p-2 font-mono border border-gray-800">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-blue-500 font-bold">FN:</span>
-                                                        <span className="text-gray-300">{log.name}</span>
-                                                    </div>
-                                                    <div className="text-gray-500 mb-1 break-all pl-6">
-                                                        ARGS: {JSON.stringify(log.args)}
-                                                    </div>
-                                                    <div className="text-green-600/80 break-all pl-6">
-                                                        RES: {log.result}
-                                                    </div>
-                                                </div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-blue-500 font-bold">FN:</span>
+                                                <span className="text-gray-300">{log.name}</span>
+                                            </div>
+                                            <div className="text-gray-500 mb-1 break-all pl-6">
+                                                ARGS: {JSON.stringify(log.args)}
+                                            </div>
+                                            <div className="text-green-600/80 break-all pl-6">
+                                                RES: {log.result}
+                                            </div>
+                                        </div>
                                             </React.Fragment>
                                         );
                                     })

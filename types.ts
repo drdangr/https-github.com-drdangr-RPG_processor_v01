@@ -133,20 +133,22 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 };
 
 export const AVAILABLE_MODELS = [
-  // Только модели с поддержкой thinking (размышлений)
+  // Только модели со скриншота Google AI Studio
   
   // Gemini 2.5 Pro - advanced reasoning, best for complex logic
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro — $1.25/$10.00 (продвинутая логика)' },
   
-  // Gemini 2.5 Flash - hybrid reasoning, 1M context, thinking budgets
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash — $0.30/$2.50 (рекомендуется)' },
-  // Пробуем алиас, если не работает - использовать полное имя
-  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50 (алиас)' },
-  { id: 'gemini-2.5-flash-preview-09-2025', name: 'Gemini 2.5 Flash Preview — $0.30/$2.50' },
+  // Gemini Flash Latest - алиас на preview версию
+  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50' },
   
-  // Убраны модели без поддержки thinking:
-  // - gemini-2.5-flash-lite (не поддерживает thinking)
-  // - gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro (legacy, без thinking)
+  // Gemini Flash-Lite Latest - алиас на preview версию
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest — $0.10/$0.40' },
+  
+  // Gemini 2.5 Flash - hybrid reasoning, 1M context
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash — $0.30/$2.50 (рекомендуется)' },
+  
+  // Gemini 2.5 Flash-Lite - most cost effective
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite — $0.10/$0.40 (самая дешёвая)' },
 ];
 
 // Modular Tool Definition
