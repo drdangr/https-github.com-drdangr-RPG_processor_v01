@@ -69,11 +69,18 @@ ${JSON.stringify(normalizedState, null, 2)}
     let workingState = currentState;
     const toolLogs: ToolCallLog[] = [];
     let narrative = "";
+    const thinkingParts: string[] = []; // Собираем мысли модели
 
     // История сообщений для многоходового диалога
     let conversationHistory: Content[] = [
       { role: 'user', parts: [{ text: userPrompt }] }
     ];
+
+    // Конфигурация thinking (мышление модели)
+    const thinkingConfig = {
+      includeThoughts: true, // Включить мысли в ответ
+      thinkingBudget: 2048   // Токенов для размышлений
+    };
 
     // Первый запрос
     let response = await ai.models.generateContent({
@@ -83,10 +90,38 @@ ${JSON.stringify(normalizedState, null, 2)}
         systemInstruction: createSystemInstruction(workingState),
         tools: geminiTools,
         temperature: 0.7,
+        thinkingConfig,
       },
     });
 
     console.log("[Service] Received initial response.");
+
+    // Функция для извлечения thoughts из ответа
+    const extractThoughts = (resp: any) => {
+      try {
+        const candidates = resp?.candidates;
+        if (candidates && candidates.length > 0) {
+          const candidate = candidates[0];
+          const parts = candidate.content?.parts || [];
+          
+          // Ищем части с thought: true
+          const thoughtParts = parts.filter((p: any) => p.thought === true && p.text);
+          
+          if (thoughtParts.length > 0) {
+            const thoughts = thoughtParts.map((p: any) => p.text).join('\n');
+            if (thoughts) {
+              thinkingParts.push(thoughts);
+              console.log("[Service] ✓ Extracted thinking:", thoughts.length, "chars");
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Service] Could not extract thoughts:", e);
+      }
+    };
+
+    // Извлекаем мысли из первого ответа
+    extractThoughts(response);
 
     // Цикл обработки инструментов
     let iteration = 0;
@@ -112,9 +147,9 @@ ${JSON.stringify(normalizedState, null, 2)}
       if (toolCalls.length === 0) {
         console.log(`[Service] Iteration ${iteration}: No tool calls, extracting narrative...`);
         
-        // Извлекаем текст из ответа
-        const textParts = assistantContent.parts?.filter(p => p.text) || [];
-        narrative = textParts.map(p => p.text).filter(Boolean).join(' ') || response.text || "";
+        // Извлекаем текст из ответа (исключая thought части)
+        const textParts = assistantContent.parts?.filter((p: any) => p.text && !p.thought) || [];
+        narrative = textParts.map((p: any) => p.text).filter(Boolean).join(' ') || response.text || "";
         
         break;
       }
@@ -172,8 +207,12 @@ ${JSON.stringify(normalizedState, null, 2)}
           systemInstruction: createSystemInstruction(workingState),
           tools: geminiTools, // Продолжаем передавать инструменты
           temperature: 0.7,
+          thinkingConfig,
         },
       });
+
+      // Извлекаем мысли из ответа
+      extractThoughts(response);
 
       iteration++;
     }
@@ -235,14 +274,18 @@ ${JSON.stringify(normalizedState, null, 2)}
         contents: conversationHistory,
         config: {
           systemInstruction: createSystemInstruction(workingState, true),
+          thinkingConfig,
           // Не передаём tools — форсируем генерацию текста
         },
       });
 
+      // Извлекаем мысли из финального ответа
+      extractThoughts(finalResponse);
+
       if (finalResponse.candidates && finalResponse.candidates.length > 0) {
         const finalContent = finalResponse.candidates[0].content;
-        const textParts = finalContent.parts?.filter(p => p.text) || [];
-        narrative = textParts.map(p => p.text).filter(Boolean).join(' ') || finalResponse.text || "";
+        const textParts = finalContent.parts?.filter((p: any) => p.text && !p.thought) || [];
+        narrative = textParts.map((p: any) => p.text).filter(Boolean).join(' ') || finalResponse.text || "";
       }
     }
 
@@ -253,18 +296,24 @@ ${JSON.stringify(normalizedState, null, 2)}
         : "Ничего не произошло.";
     }
 
+    // Объединяем все мысли
+    const thinking = thinkingParts.length > 0 ? thinkingParts.join('\n\n---\n\n') : undefined;
+
     console.log("[Service] Final result:", {
       narrativeLength: narrative.length,
       narrativePreview: narrative.substring(0, 150),
       toolLogsCount: toolLogs.length,
       iterations: iteration,
+      hasThinking: !!thinking,
+      thinkingLength: thinking?.length || 0,
       stateChanged: workingState !== currentState
     });
 
     return {
       narrative,
       toolLogs,
-      newState: workingState
+      newState: workingState,
+      thinking
     };
 
   } catch (error: any) {

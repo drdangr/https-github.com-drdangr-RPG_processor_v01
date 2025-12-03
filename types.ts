@@ -50,6 +50,7 @@ export interface SimulationResult {
   narrative: string;
   toolLogs: ToolCallLog[];
   newState: GameState;
+  thinking?: string; // Мысли модели (reasoning)
 }
 
 // Modular Tool Definition

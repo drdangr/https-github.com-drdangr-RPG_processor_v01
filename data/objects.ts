@@ -78,7 +78,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764693137423",
     "name": "Ключ от сундука",
-    "connectionId": "char_001",
+    "connectionId": "char_1764641742185",
     "attributes": {
       "condition": "в хорошем состоянии",
       "size": "большой"
@@ -96,7 +96,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764714563883",
     "name": "Книга полезных заклинаний",
-    "connectionId": "loc_001",
+    "connectionId": "obj_1764693090407",
     "attributes": {
       "type": "сборник полезных заклинаний",
       "title": "Заклининания для Dummy"

@@ -394,6 +394,25 @@ const App: React.FC = () => {
                              </p>
                         </div>
 
+                        {lastResult.thinking && (
+                            <div className="mb-6">
+                                <details className="group">
+                                    <summary className="cursor-pointer list-none">
+                                        <div className="flex items-center gap-2 text-[10px] font-bold text-cyan-500/70 uppercase tracking-wider mb-2 hover:text-cyan-400 transition-colors">
+                                            <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                            <span>💭 Мысли модели</span>
+                                            <span className="text-gray-600 font-normal lowercase">({lastResult.thinking.length} символов)</span>
+                                        </div>
+                                    </summary>
+                                    <div className="bg-cyan-950/20 rounded-lg p-3 border border-cyan-900/30 mt-2">
+                                        <p className="text-cyan-200/60 text-xs leading-relaxed whitespace-pre-wrap font-mono">
+                                            {lastResult.thinking}
+                                        </p>
+                                    </div>
+                                </details>
+                            </div>
+                        )}
+
                         <div className="mb-6">
                             <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-2 tracking-wider">
                                 Лог инструментов
