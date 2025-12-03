@@ -24,6 +24,17 @@ const App: React.FC = () => {
   const [aiSettings, setAiSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
   const [middleTab, setMiddleTab] = useState<'tools' | 'settings'>('tools');
 
+  // Resizer state for middle column panels
+  const [topPanelHeight, setTopPanelHeight] = useState(250); // pixels
+  const middleColumnRef = useRef<HTMLElement | null>(null);
+  const isResizing = useRef(false);
+
+  // Column width state (percentages)
+  const [leftColumnWidth, setLeftColumnWidth] = useState(25); // %
+  const [rightColumnWidth, setRightColumnWidth] = useState(33); // %
+  const mainRef = useRef<HTMLElement | null>(null);
+  const isResizingColumn = useRef<'left' | 'right' | null>(null);
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastResult, setLastResult] = useState<SimulationResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -54,6 +65,77 @@ const App: React.FC = () => {
 
     return () => window.removeEventListener('error', handleGlobalError);
   }, []);
+
+  // Resizer handlers
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current || !middleColumnRef.current) return;
+      
+      const containerRect = middleColumnRef.current.getBoundingClientRect();
+      const tabsHeight = 36; // Height of tabs
+      const newHeight = e.clientY - containerRect.top - tabsHeight;
+      
+      // Constrain between 100px and container height - 150px
+      const maxHeight = containerRect.height - tabsHeight - 150;
+      const constrainedHeight = Math.max(100, Math.min(newHeight, maxHeight));
+      
+      setTopPanelHeight(constrainedHeight);
+    };
+    
+    const handleMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Column resizer handlers
+  const handleColumnResizeStart = (column: 'left' | 'right') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingColumn.current = column;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingColumn.current || !mainRef.current) return;
+      
+      const containerRect = mainRef.current.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const mouseX = e.clientX - containerRect.left;
+      const percentage = (mouseX / containerWidth) * 100;
+      
+      if (isResizingColumn.current === 'left') {
+        // Left resizer: adjust left column width
+        const newWidth = Math.max(15, Math.min(percentage, 40));
+        setLeftColumnWidth(newWidth);
+      } else {
+        // Right resizer: adjust right column width
+        const newWidth = Math.max(20, Math.min(100 - percentage, 50));
+        setRightColumnWidth(newWidth);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      isResizingColumn.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   const updateWorld = (w: WorldData) => {
     setGameState(prev => {
@@ -249,10 +331,10 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-12 overflow-hidden">
+      <main ref={mainRef} className="flex-1 flex overflow-hidden">
         
         {/* Left Column: Data Editor */}
-        <section className="col-span-3 border-r border-gray-800 flex flex-col bg-gray-900/50 min-h-0">
+        <section style={{ width: `${leftColumnWidth}%` }} className="shrink-0 flex flex-col bg-gray-900/50 min-h-0">
           <div className="flex border-b border-gray-800">
             {['world', 'locations', 'players', 'objects'].map((tab) => (
               <button
@@ -295,10 +377,18 @@ const App: React.FC = () => {
           </div>
         </section>
 
+        {/* Left Resizer */}
+        <div 
+          onMouseDown={handleColumnResizeStart('left')}
+          className="w-1.5 bg-gray-800 hover:bg-purple-600 cursor-col-resize shrink-0 flex items-center justify-center group transition-colors"
+        >
+          <div className="h-12 w-0.5 bg-gray-600 group-hover:bg-purple-300 rounded transition-colors" />
+        </div>
+
         {/* Middle Column: Action */}
-        <section className="col-span-5 border-r border-gray-800 flex flex-col bg-gray-950 relative">
+        <section ref={middleColumnRef} style={{ width: `${100 - leftColumnWidth - rightColumnWidth}%` }} className="shrink-0 flex flex-col bg-gray-950 relative">
             {/* Tabs: Tools / Settings */}
-            <div className="flex border-b border-gray-800 bg-gray-900/50">
+            <div className="flex border-b border-gray-800 bg-gray-900/50 shrink-0">
               <button
                 type="button"
                 onClick={() => setMiddleTab('tools')}
@@ -325,7 +415,7 @@ const App: React.FC = () => {
 
             {/* Tools Tab */}
             {middleTab === 'tools' && (
-              <div className="h-1/3 border-b border-gray-800 p-4 overflow-y-auto bg-gray-900/30">
+              <div style={{ height: topPanelHeight }} className="shrink-0 p-4 overflow-y-auto bg-gray-900/30">
                 <div className="grid grid-cols-1 gap-2">
                     {ALL_TOOLS.map(tool => {
                         const isEnabled = toolEnabledState[tool.definition.name];
@@ -351,7 +441,7 @@ const App: React.FC = () => {
 
             {/* Settings Tab */}
             {middleTab === 'settings' && (
-              <div className="h-1/3 border-b border-gray-800 p-4 overflow-y-auto bg-gray-900/30">
+              <div style={{ height: topPanelHeight }} className="shrink-0 p-4 overflow-y-auto bg-gray-900/30">
                 <div className="space-y-4">
                   {/* Model Selection */}
                   <div>
@@ -460,7 +550,15 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <div className="flex-1 p-6 flex flex-col gap-4 relative">
+            {/* Resizer */}
+            <div 
+              onMouseDown={handleResizeStart}
+              className="h-2 bg-gray-800 hover:bg-purple-600 cursor-row-resize shrink-0 flex items-center justify-center group transition-colors border-y border-gray-700"
+            >
+              <div className="w-12 h-0.5 bg-gray-600 group-hover:bg-purple-300 rounded transition-colors" />
+            </div>
+
+            <div className="flex-1 p-6 flex flex-col gap-4 relative min-h-0">
                 <div className="flex-1 flex flex-col">
                     <label htmlFor="scenario-input" className="text-sm font-bold text-gray-300 mb-2">Ввод сценария / Действие</label>
                     <textarea 
@@ -511,8 +609,16 @@ const App: React.FC = () => {
             )}
         </section>
 
+        {/* Right Resizer */}
+        <div 
+          onMouseDown={handleColumnResizeStart('right')}
+          className="w-1.5 bg-gray-800 hover:bg-purple-600 cursor-col-resize shrink-0 flex items-center justify-center group transition-colors"
+        >
+          <div className="h-12 w-0.5 bg-gray-600 group-hover:bg-purple-300 rounded transition-colors" />
+        </div>
+
         {/* Right Column: Results */}
-        <section className="col-span-4 bg-gray-900 flex flex-col h-full overflow-hidden">
+        <section style={{ width: `${rightColumnWidth}%` }} className="shrink-0 bg-gray-900 flex flex-col h-full overflow-hidden">
             <div className="p-4 border-b border-gray-800 bg-gray-800/50">
                 <h3 className="text-sm font-bold text-gray-200">Результат симуляции</h3>
             </div>
