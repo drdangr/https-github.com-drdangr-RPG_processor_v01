@@ -1,14 +1,24 @@
 import { GoogleGenAI, Tool, Content, Part } from "@google/genai";
-import { GameState, SimulationResult, ToolCallLog, GameTool } from "../types";
+import { GameState, SimulationResult, ToolCallLog, GameTool, AISettings, DEFAULT_AI_SETTINGS } from "../types";
 import { normalizeState } from "../utils/gameUtils";
 
-// Конфигурация
-const MAX_TOOL_ITERATIONS = 5; // Максимум итераций с инструментами
+// Стандартный системный промпт
+export const DEFAULT_SYSTEM_PROMPT = `Ты - продвинутый ИИ Гейм-Мастер (Ведущий).
+0. Учитывай текущее состояние мира (JSON) и используй его для генерации ответа.
+1. Используй следующие правила:      
+2. Помни, что мир построен на правилах и законах, вытекающих из его описания и жанра игры.
+3. Старайся следовать этим правилам и законам. Не нарушай их.
+4. Используй инструменты для изменения состояния мира, игроков, объектов и локаций с помощью добавления изменения или удаления атрибутов.
+5. Используй инструменты для создания новых объектов, если это выглядит логично или следует из текста пользователя.
+6. Используй инструменты для удаления объектов, если они перестали существовать в мире как первоначальная сущность.
+7. Используй инструменты для перемещения объектов между игроками, локациями и объектами. Не забывай, что объекты могут быть вложены в другие объекты.
+8. Ты можешь вызывать инструменты несколько раз подряд — например, сначала создать объект, потом переместить его.`;
 
 export const processGameTurn = async (
   currentState: GameState,
   userPrompt: string,
-  enabledTools: GameTool[]
+  enabledTools: GameTool[],
+  settings: AISettings = DEFAULT_AI_SETTINGS
 ): Promise<SimulationResult> => {
   console.log("[Service] Starting processGameTurn...");
 
@@ -39,17 +49,8 @@ export const processGameTurn = async (
 
     const createSystemInstruction = (state: GameState, isFinalNarrative: boolean = false) => {
       const normalizedState = normalizeState(state);
-      const baseInstruction = `
-Ты - продвинутый ИИ Гейм-Мастер (Ведущий).
-0. Учитывай текущее состояние мира (JSON) и используй его для генерации ответа.
-1. Используй следующие правила:      
-2. Помни, что мир построен на правилах и законах, вытекающих из его описания и жанра игры.
-3. Старайся следовать этим правилам и законам. Не нарушай их.
-4. Используй инструменты для изменения состояния мира, игроков, объектов и локаций с помощью добавления изменения или удаления атрибутов.
-5. Используй инструменты для создания новых объектов, если это выглядит логично или следует из текста пользователя.
-6. Используй инструменты для удаления объектов, если они перестали существовать в мире как первоначальная сущность.
-7. Используй инструменты для перемещения объектов между игроками, локациями и объектами. Не забывай, что объекты могут быть вложены в другие объекты.
-8. Ты можешь вызывать инструменты несколько раз подряд — например, сначала создать объект, потом переместить его.
+      const basePrompt = settings.systemPromptOverride || DEFAULT_SYSTEM_PROMPT;
+      const baseInstruction = `${basePrompt}
 
 ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
 ${JSON.stringify(normalizedState, null, 2)}
@@ -62,7 +63,7 @@ ${JSON.stringify(normalizedState, null, 2)}
       return baseInstruction;
     };
 
-    const modelId = "gemini-2.5-flash"; 
+    const modelId = settings.modelId; 
 
     console.log(`[Service] Sending prompt to ${modelId} with ${geminiTools.length > 0 ? geminiTools[0].functionDeclarations?.length : 0} tools...`);
     
@@ -78,8 +79,8 @@ ${JSON.stringify(normalizedState, null, 2)}
 
     // Конфигурация thinking (мышление модели)
     const thinkingConfig = {
-      includeThoughts: true, // Включить мысли в ответ
-      thinkingBudget: 2048   // Токенов для размышлений
+      includeThoughts: true,
+      thinkingBudget: settings.thinkingBudget
     };
 
     // Первый запрос
@@ -89,7 +90,7 @@ ${JSON.stringify(normalizedState, null, 2)}
       config: {
         systemInstruction: createSystemInstruction(workingState),
         tools: geminiTools,
-        temperature: 0.7,
+        temperature: settings.temperature,
         thinkingConfig,
       },
     });
@@ -126,7 +127,7 @@ ${JSON.stringify(normalizedState, null, 2)}
     // Цикл обработки инструментов
     let iteration = 0;
     
-    while (iteration < MAX_TOOL_ITERATIONS) {
+    while (iteration < settings.maxIterations) {
       const candidates = response.candidates;
       
       if (!candidates || candidates.length === 0) {
@@ -206,7 +207,7 @@ ${JSON.stringify(normalizedState, null, 2)}
         config: {
           systemInstruction: createSystemInstruction(workingState),
           tools: geminiTools, // Продолжаем передавать инструменты
-          temperature: 0.7,
+          temperature: settings.temperature,
           thinkingConfig,
         },
       });
@@ -218,8 +219,8 @@ ${JSON.stringify(normalizedState, null, 2)}
     }
 
     // Если вышли по лимиту итераций — генерируем финальный нарратив
-    if (iteration >= MAX_TOOL_ITERATIONS && !narrative) {
-      console.warn(`[Service] ⚠️ Reached max iterations (${MAX_TOOL_ITERATIONS}), forcing narrative generation...`);
+    if (iteration >= settings.maxIterations && !narrative) {
+      console.warn(`[Service] ⚠️ Reached max iterations (${settings.maxIterations}), forcing narrative generation...`);
       
       // Добавляем последний ответ в историю если есть
       const lastCandidates = response.candidates;

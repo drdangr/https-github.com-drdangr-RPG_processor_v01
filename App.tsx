@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, SimulationResult, WorldData, LocationData, PlayerData, ObjectData } from './types';
+import { GameState, SimulationResult, WorldData, LocationData, PlayerData, ObjectData, AISettings, DEFAULT_AI_SETTINGS, AVAILABLE_MODELS } from './types';
 import { INITIAL_STATE } from './constants';
 import { ALL_TOOLS } from './tools/index';
-import { processGameTurn } from './services/geminiService';
+import { processGameTurn, DEFAULT_SYSTEM_PROMPT } from './services/geminiService';
 import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor, ConnectionTarget, LocationOption } from './components/FormEditors';
 import DiffView from './components/DiffView';
 import { saveDataFiles } from './utils/dataExporter';
@@ -19,6 +19,10 @@ const App: React.FC = () => {
     ALL_TOOLS.forEach(t => initial[t.definition.name] = true);
     return initial;
   });
+
+  // AI Settings state
+  const [aiSettings, setAiSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
+  const [middleTab, setMiddleTab] = useState<'tools' | 'settings'>('tools');
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastResult, setLastResult] = useState<SimulationResult | null>(null);
@@ -196,7 +200,7 @@ const App: React.FC = () => {
     const enabledTools = ALL_TOOLS.filter(t => toolEnabledState[t.definition.name]);
 
     try {
-      const result = await processGameTurn(gameState, playerInput, enabledTools);
+      const result = await processGameTurn(gameState, playerInput, enabledTools, aiSettings);
       console.log("[App] Result received:", result);
       setLastResult(result);
     } catch (err: any) {
@@ -293,11 +297,35 @@ const App: React.FC = () => {
 
         {/* Middle Column: Action */}
         <section className="col-span-5 border-r border-gray-800 flex flex-col bg-gray-950 relative">
-            <div className="h-1/3 border-b border-gray-800 p-4 overflow-y-auto bg-gray-900/30">
-                <h3 className="text-[10px] font-bold text-gray-400 uppercase mb-3 tracking-wider flex justify-between">
-                    <span>Loaded Tools ({ALL_TOOLS.length})</span>
-                    <span className="text-purple-400">{ALL_TOOLS.filter(t => toolEnabledState[t.definition.name]).length} Active</span>
-                </h3>
+            {/* Tabs: Tools / Settings */}
+            <div className="flex border-b border-gray-800 bg-gray-900/50">
+              <button
+                type="button"
+                onClick={() => setMiddleTab('tools')}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+                  middleTab === 'tools' 
+                    ? 'text-purple-400 border-b-2 border-purple-500 bg-gray-800/50' 
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                }`}
+              >
+                🔧 Tools ({ALL_TOOLS.filter(t => toolEnabledState[t.definition.name]).length}/{ALL_TOOLS.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMiddleTab('settings')}
+                className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+                  middleTab === 'settings' 
+                    ? 'text-cyan-400 border-b-2 border-cyan-500 bg-gray-800/50' 
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                }`}
+              >
+                ⚙️ Settings
+              </button>
+            </div>
+
+            {/* Tools Tab */}
+            {middleTab === 'tools' && (
+              <div className="h-1/3 border-b border-gray-800 p-4 overflow-y-auto bg-gray-900/30">
                 <div className="grid grid-cols-1 gap-2">
                     {ALL_TOOLS.map(tool => {
                         const isEnabled = toolEnabledState[tool.definition.name];
@@ -318,7 +346,119 @@ const App: React.FC = () => {
                         );
                     })}
                 </div>
-            </div>
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {middleTab === 'settings' && (
+              <div className="h-1/3 border-b border-gray-800 p-4 overflow-y-auto bg-gray-900/30">
+                <div className="space-y-4">
+                  {/* Model Selection */}
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Модель AI</label>
+                    <select
+                      value={aiSettings.modelId}
+                      onChange={(e) => setAiSettings(prev => ({ ...prev, modelId: e.target.value }))}
+                      className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500"
+                    >
+                      {AVAILABLE_MODELS.map(model => (
+                        <option key={model.id} value={model.id}>{model.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Max Iterations */}
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                      Макс. шагов: <span className="text-cyan-400">{aiSettings.maxIterations}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={aiSettings.maxIterations}
+                      onChange={(e) => setAiSettings(prev => ({ ...prev, maxIterations: parseInt(e.target.value) }))}
+                      className="w-full accent-cyan-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-gray-600">
+                      <span>1</span>
+                      <span>5</span>
+                      <span>10</span>
+                    </div>
+                  </div>
+
+                  {/* Temperature */}
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                      Temperature: <span className="text-cyan-400">{aiSettings.temperature.toFixed(1)}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={aiSettings.temperature}
+                      onChange={(e) => setAiSettings(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                      className="w-full accent-cyan-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-gray-600">
+                      <span>0 (точный)</span>
+                      <span>1</span>
+                      <span>2 (креативный)</span>
+                    </div>
+                  </div>
+
+                  {/* Thinking Budget */}
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                      Thinking Budget: <span className="text-cyan-400">{aiSettings.thinkingBudget}</span> токенов
+                    </label>
+                    <input
+                      type="range"
+                      min="512"
+                      max="8192"
+                      step="512"
+                      value={aiSettings.thinkingBudget}
+                      onChange={(e) => setAiSettings(prev => ({ ...prev, thinkingBudget: parseInt(e.target.value) }))}
+                      className="w-full accent-cyan-500"
+                    />
+                    <div className="flex justify-between text-[9px] text-gray-600">
+                      <span>512</span>
+                      <span>4096</span>
+                      <span>8192</span>
+                    </div>
+                  </div>
+
+                  {/* System Prompt Override */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт</label>
+                      {aiSettings.systemPromptOverride && (
+                        <button
+                          type="button"
+                          onClick={() => setAiSettings(prev => ({ ...prev, systemPromptOverride: undefined }))}
+                          className="text-[9px] px-2 py-0.5 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                        >
+                          Сбросить
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={aiSettings.systemPromptOverride ?? DEFAULT_SYSTEM_PROMPT}
+                      onChange={(e) => setAiSettings(prev => ({ 
+                        ...prev, 
+                        systemPromptOverride: e.target.value === DEFAULT_SYSTEM_PROMPT ? undefined : e.target.value 
+                      }))}
+                      className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none"
+                      placeholder="Системный промпт для AI..."
+                    />
+                    <p className="text-[9px] text-gray-600 mt-1">
+                      {aiSettings.systemPromptOverride ? '✏️ Используется кастомный промпт' : '📄 Используется стандартный промпт'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 p-6 flex flex-col gap-4 relative">
                 <div className="flex-1 flex flex-col">

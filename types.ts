@@ -53,6 +53,30 @@ export interface SimulationResult {
   thinking?: string; // Мысли модели (reasoning)
 }
 
+// Настройки AI
+export interface AISettings {
+  modelId: string;
+  maxIterations: number;
+  temperature: number;
+  thinkingBudget: number;
+  systemPromptOverride?: string; // Если задан, заменяет стандартный промпт
+}
+
+export const DEFAULT_AI_SETTINGS: AISettings = {
+  modelId: 'gemini-2.5-flash',
+  maxIterations: 5,
+  temperature: 0.7,
+  thinkingBudget: 2048,
+};
+
+export const AVAILABLE_MODELS = [
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (рекомендуется)' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (медленнее, умнее)' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (legacy)' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (legacy)' },
+];
+
 // Modular Tool Definition
 export interface GameTool {
   definition: FunctionDeclaration;
