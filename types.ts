@@ -133,6 +133,8 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 };
 
 export const AVAILABLE_MODELS = [
+  // Только модели с поддержкой thinking (размышлений)
+  
   // Gemini 2.5 Pro - advanced reasoning, best for complex logic
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro — $1.25/$10.00 (продвинутая логика)' },
   
@@ -142,16 +144,9 @@ export const AVAILABLE_MODELS = [
   { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50 (алиас)' },
   { id: 'gemini-2.5-flash-preview-09-2025', name: 'Gemini 2.5 Flash Preview — $0.30/$2.50' },
   
-  // Gemini 2.5 Flash-Lite - most cost effective
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite — $0.10/$0.40 (самая дешёвая)' },
-  // Пробуем алиас, если не работает - использовать полное имя
-  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest — $0.10/$0.40 (алиас)' },
-  { id: 'gemini-2.5-flash-lite-preview-09-2025', name: 'Gemini 2.5 Flash-Lite Preview — $0.10/$0.40' },
-  
-  // Legacy models
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (legacy)' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (legacy)' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (legacy)' },
+  // Убраны модели без поддержки thinking:
+  // - gemini-2.5-flash-lite (не поддерживает thinking)
+  // - gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro (legacy, без thinking)
 ];
 
 // Modular Tool Definition
