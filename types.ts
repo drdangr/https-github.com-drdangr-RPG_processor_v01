@@ -133,9 +133,19 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 };
 
 export const AVAILABLE_MODELS = [
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (рекомендуется)' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (медленнее, умнее)' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+  // Gemini 2.5 Pro - advanced reasoning, best for complex logic
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro — $1.25/$10.00 (продвинутая логика)' },
+  
+  // Gemini 2.5 Flash - hybrid reasoning, 1M context, thinking budgets
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash — $0.30/$2.50 (рекомендуется)' },
+  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50' },
+  
+  // Gemini 2.5 Flash-Lite - most cost effective
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite — $0.10/$0.40 (самая дешёвая)' },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest — $0.10/$0.40' },
+  
+  // Legacy models
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (legacy)' },
   { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (legacy)' },
   { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (legacy)' },
 ];
