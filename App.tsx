@@ -25,7 +25,7 @@ const App: React.FC = () => {
   const [middleTab, setMiddleTab] = useState<'tools' | 'settings'>('tools');
 
   // Resizer state for middle column panels
-  const [topPanelHeight, setTopPanelHeight] = useState(250); // pixels
+  const [topPanelHeight, setTopPanelHeight] = useState(550); // pixels (larger = smaller input panel)
   const middleColumnRef = useRef<HTMLElement | null>(null);
   const isResizing = useRef(false);
 
@@ -80,8 +80,8 @@ const App: React.FC = () => {
       const tabsHeight = 36; // Height of tabs
       const newHeight = e.clientY - containerRect.top - tabsHeight;
       
-      // Constrain between 100px and container height - 150px
-      const maxHeight = containerRect.height - tabsHeight - 150;
+      // Constrain between 100px and container height - 100px (min input panel height)
+      const maxHeight = containerRect.height - tabsHeight - 100;
       const constrainedHeight = Math.max(100, Math.min(newHeight, maxHeight));
       
       setTopPanelHeight(constrainedHeight);
