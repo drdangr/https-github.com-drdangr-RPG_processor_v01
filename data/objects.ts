@@ -48,7 +48,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764644085541_jv8h",
     "name": "Пакетик с травкой",
-    "connectionId": "loc_001",
+    "connectionId": "obj_1764621899013",
     "attributes": {
       "condition": "запечатан",
       "size": "небольшой",
@@ -71,14 +71,14 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "name": "Сундук",
     "connectionId": "loc_001",
     "attributes": {
-      "condition": "закрыт на ключ",
+      "condition": "открыт",
       "feature": "имеет отверстие для ключа"
     }
   },
   {
     "id": "obj_1764693137423",
     "name": "Ключ от сундука",
-    "connectionId": "char_1764641742185",
+    "connectionId": "char_001",
     "attributes": {
       "condition": "в хорошем состоянии",
       "size": "большой"
@@ -120,17 +120,6 @@ export const INITIAL_OBJECTS: ObjectData[] = [
       "condition": "свежее",
       "appearance": "наливное красное",
       "smell": "пахнет свежестью"
-    }
-  },
-  {
-    "id": "obj_1764715586153_3cbk",
-    "name": "Патроны",
-    "connectionId": "loc_001",
-    "attributes": {
-      "condition": "остался один, лежит на столе",
-      "quantity": "шесть",
-      "weight": "тяжелые",
-      "caliber": "крупного калибра"
     }
   },
   {

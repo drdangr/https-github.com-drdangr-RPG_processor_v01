@@ -4,12 +4,14 @@ import { GameTool } from '../types';
 // Используется, если среда не поддерживает автоматическое сканирование (require.context)
 import moveObject from './moveObject';
 import setAttribute from './setAttribute';
+import deleteAttribute from './deleteAttribute';
 import createObject from './createObject';
 import deleteObject from './deleteObject';
 
 let tools: GameTool[] = [
   moveObject,
   setAttribute,
+  deleteAttribute,
   createObject,
   deleteObject
 ];

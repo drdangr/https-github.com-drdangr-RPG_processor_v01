@@ -2,6 +2,9 @@ import { GoogleGenAI, Tool, Content, Part } from "@google/genai";
 import { GameState, SimulationResult, ToolCallLog, GameTool } from "../types";
 import { normalizeState } from "../utils/gameUtils";
 
+// Конфигурация
+const MAX_TOOL_ITERATIONS = 5; // Максимум итераций с инструментами
+
 export const processGameTurn = async (
   currentState: GameState,
   userPrompt: string,
@@ -34,235 +37,227 @@ export const processGameTurn = async (
     const toolDefinitions = enabledTools.map(t => t.definition);
     const geminiTools: Tool[] = toolDefinitions.length > 0 ? [{ functionDeclarations: toolDefinitions }] : [];
 
-    const createSystemInstruction = (state: GameState) => {
-      // Нормализуем состояние перед сериализацией - гарантируем наличие attributes
+    const createSystemInstruction = (state: GameState, isFinalNarrative: boolean = false) => {
       const normalizedState = normalizeState(state);
-      return `
+      const baseInstruction = `
 Ты - продвинутый ИИ Гейм-Мастер (Ведущий).
-Твоя задача:
-1. Проанализировать текущее состояние мира (JSON) и намерение/действие игрока.
-2. Использовать ДОСТУПНЫЕ ИНСТРУМЕНТЫ (если они подходят).
-3. Обдумать последствия произошедшего и по необходимости использовать инструменты для обновления состояния мира и всех сущностей (игроков, объектов, локаций) с их атрибутами или их удаления.
-4. Написать художественное литературное описание результата.
-   - Учитывай locationId игрока для определения видимости объектов.
-   - Если игрок хочет взаимодействовать с объектом, который находится в другой локации, опиши, что это невозможно.
-ВАЖНО:
-- Всегда отвечай на том же языке, на котором написан входной запрос и данные состояния (РУССКИЙ).
-- Текст должен быть атмосферным и соответствовать жанру.
+0. Учитывай текущее состояние мира (JSON) и используй его для генерации ответа.
+1. Используй следующие правила:      
+2. Помни, что мир построен на правилах и законах, вытекающих из его описания и жанра игры.
+3. Старайся следовать этим правилам и законам. Не нарушай их.
+4. Используй инструменты для изменения состояния мира, игроков, объектов и локаций с помощью добавления изменения или удаления атрибутов.
+5. Используй инструменты для создания новых объектов, если это выглядит логично или следует из текста пользователя.
+6. Используй инструменты для удаления объектов, если они перестали существовать в мире как первоначальная сущность.
+7. Используй инструменты для перемещения объектов между игроками, локациями и объектами. Не забывай, что объекты могут быть вложены в другие объекты.
+8. Ты можешь вызывать инструменты несколько раз подряд — например, сначала создать объект, потом переместить его.
 
 ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
 ${JSON.stringify(normalizedState, null, 2)}
 `;
+
+      if (isFinalNarrative) {
+        return baseInstruction + "\n\nВсе необходимые изменения состояния мира уже внесены. Опиши художественно, что произошло в результате действий игрока.";
+      }
+      
+      return baseInstruction;
     };
 
     const modelId = "gemini-2.5-flash"; 
 
     console.log(`[Service] Sending prompt to ${modelId} with ${geminiTools.length > 0 ? geminiTools[0].functionDeclarations?.length : 0} tools...`);
     
-    const initialContents: Content[] = [
+    let workingState = currentState;
+    const toolLogs: ToolCallLog[] = [];
+    let narrative = "";
+
+    // История сообщений для многоходового диалога
+    let conversationHistory: Content[] = [
       { role: 'user', parts: [{ text: userPrompt }] }
     ];
 
-    const result1 = await ai.models.generateContent({
+    // Первый запрос
+    let response = await ai.models.generateContent({
       model: modelId,
-      contents: initialContents,
+      contents: conversationHistory,
       config: {
-        systemInstruction: createSystemInstruction(currentState),
+        systemInstruction: createSystemInstruction(workingState),
         tools: geminiTools,
         temperature: 0.7,
       },
     });
 
-    console.log("[Service] Received response 1.");
-    console.log("[Service] result1 structure:", {
-      hasCandidates: !!result1.candidates,
-      candidatesCount: result1.candidates?.length || 0,
-      hasText: !!result1.text,
-      textLength: result1.text?.length || 0
-    });
+    console.log("[Service] Received initial response.");
+
+    // Цикл обработки инструментов
+    let iteration = 0;
     
-    let workingState = currentState;
-    const toolLogs: ToolCallLog[] = [];
-    let narrative = "";
-
-    const candidates = result1.candidates;
-    if (!candidates || candidates.length === 0) {
-        console.error("[Service] ❌ result1.candidates пуст или отсутствует");
-        return {
-            narrative: "Ошибка: ИИ не вернул вариантов ответа.",
-            toolLogs: [],
-            newState: currentState
-        };
-    }
-
-    const firstCandidateContent = candidates[0].content;
-    console.log("[Service] result1.candidates[0].content:", {
-      role: firstCandidateContent.role,
-      partsCount: firstCandidateContent.parts?.length || 0
-    });
-
-    const toolCalls = firstCandidateContent.parts?.filter(p => p.functionCall).map(p => p.functionCall);
-    
-    if (toolCalls && toolCalls.length > 0) {
-      console.log("[Service] Found tool calls:", toolCalls.map(c => ({
-        name: c?.name,
-        id: c?.id
-      })));
-    }
-
-    if (toolCalls && toolCalls.length > 0) {
-      console.log(`[Service] Processing ${toolCalls.length} tool calls...`);
+    while (iteration < MAX_TOOL_ITERATIONS) {
+      const candidates = response.candidates;
       
-      const toolResponseParts: Part[] = [];
+      if (!candidates || candidates.length === 0) {
+        console.error("[Service] ❌ candidates пуст или отсутствует");
+        return {
+          narrative: "Ошибка: ИИ не вернул вариантов ответа.",
+          toolLogs,
+          newState: workingState
+        };
+      }
 
+      const assistantContent = candidates[0].content;
+      
+      // Извлекаем tool calls из ответа
+      const toolCalls = assistantContent.parts?.filter(p => p.functionCall).map(p => p.functionCall) || [];
+      
+      // Если нет tool calls — выходим из цикла
+      if (toolCalls.length === 0) {
+        console.log(`[Service] Iteration ${iteration}: No tool calls, extracting narrative...`);
+        
+        // Извлекаем текст из ответа
+        const textParts = assistantContent.parts?.filter(p => p.text) || [];
+        narrative = textParts.map(p => p.text).filter(Boolean).join(' ') || response.text || "";
+        
+        break;
+      }
+
+      console.log(`[Service] Iteration ${iteration}: Processing ${toolCalls.length} tool calls...`);
+      
+      // Выполняем инструменты
+      const toolResponseParts: Part[] = [];
+      
       for (const call of toolCalls) {
         if (!call) continue;
-        console.log(`[Service] Executing tool: ${call.name}`);
         
-        // Find the tool implementation
+        console.log(`[Service] Executing tool: ${call.name}`, call.args);
+        
         const tool = enabledTools.find(t => t.definition.name === call.name);
         
         let executionResult = "Ошибка: Инструмент не найден или отключен.";
         if (tool) {
-            try {
-                const execution = tool.apply(workingState, call.args);
-                workingState = execution.newState;
-                executionResult = execution.result;
-            } catch (e: any) {
-                executionResult = `Ошибка выполнения: ${e.message}`;
-            }
+          try {
+            const execution = tool.apply(workingState, call.args);
+            workingState = execution.newState;
+            executionResult = execution.result;
+          } catch (e: any) {
+            executionResult = `Ошибка выполнения: ${e.message}`;
+          }
         }
 
-        // Log
         toolLogs.push({
           name: call.name,
           args: call.args,
-          result: executionResult
+          result: executionResult,
+          iteration: iteration
         });
 
         toolResponseParts.push({
-            functionResponse: {
+          functionResponse: {
+            name: call.name,
+            id: call.id,
+            response: { result: executionResult }
+          }
+        });
+      }
+
+      // Добавляем ответ ассистента и результаты инструментов в историю
+      conversationHistory.push(assistantContent);
+      conversationHistory.push({ role: 'user', parts: toolResponseParts });
+
+      console.log(`[Service] Iteration ${iteration}: Sending tool results back to AI...`);
+
+      // Следующий запрос к AI с обновлённым состоянием
+      response = await ai.models.generateContent({
+        model: modelId,
+        contents: conversationHistory,
+        config: {
+          systemInstruction: createSystemInstruction(workingState),
+          tools: geminiTools, // Продолжаем передавать инструменты
+          temperature: 0.7,
+        },
+      });
+
+      iteration++;
+    }
+
+    // Если вышли по лимиту итераций — генерируем финальный нарратив
+    if (iteration >= MAX_TOOL_ITERATIONS && !narrative) {
+      console.warn(`[Service] ⚠️ Reached max iterations (${MAX_TOOL_ITERATIONS}), forcing narrative generation...`);
+      
+      // Добавляем последний ответ в историю если есть
+      const lastCandidates = response.candidates;
+      if (lastCandidates && lastCandidates.length > 0) {
+        const lastContent = lastCandidates[0].content;
+        
+        // Обрабатываем оставшиеся tool calls
+        const remainingToolCalls = lastContent.parts?.filter(p => p.functionCall).map(p => p.functionCall) || [];
+        if (remainingToolCalls.length > 0) {
+          const toolResponseParts: Part[] = [];
+          
+          for (const call of remainingToolCalls) {
+            if (!call) continue;
+            
+            const tool = enabledTools.find(t => t.definition.name === call.name);
+            let executionResult = "Ошибка: Инструмент не найден или отключен.";
+            
+            if (tool) {
+              try {
+                const execution = tool.apply(workingState, call.args);
+                workingState = execution.newState;
+                executionResult = execution.result;
+              } catch (e: any) {
+                executionResult = `Ошибка выполнения: ${e.message}`;
+              }
+            }
+
+            toolLogs.push({
+              name: call.name,
+              args: call.args,
+              result: executionResult,
+              iteration: iteration // Последняя итерация
+            });
+
+            toolResponseParts.push({
+              functionResponse: {
                 name: call.name,
                 id: call.id,
                 response: { result: executionResult }
-            }
-        });
-      }
-
-      const historyContents: Content[] = [
-          ...initialContents,
-          firstCandidateContent, 
-          { role: 'user', parts: toolResponseParts } 
-      ];
-
-      console.log("[Service] Sending tool outputs back to AI for narrative...");
-      console.log("[Service] Tool responses being sent:", toolResponseParts.map(p => ({
-        functionName: p.functionResponse?.name,
-        functionId: p.functionResponse?.id,
-        responsePreview: JSON.stringify(p.functionResponse?.response).substring(0, 100)
-      })));
-      console.log("[Service] Updated workingState summary:", {
-        objectsCount: workingState.objects.length,
-        playersCount: workingState.players.length,
-        locationsCount: workingState.locations.length
-      });
-
-      const result2 = await ai.models.generateContent({
-          model: modelId,
-          contents: historyContents,
-          config: {
-              systemInstruction: createSystemInstruction(workingState) + "\n\nВсе необходимые изменения состояния мира уже внесены. Опиши художественно, что произошло в результате действий игрока.",
-              // Не передаём tools - это заставит Gemini генерировать только текст
+              }
+            });
           }
-      });
-
-      console.log("[Service] Received response 2.");
-      console.log("[Service] result2 structure:", {
-        hasCandidates: !!result2.candidates,
-        candidatesCount: result2.candidates?.length || 0,
-        hasText: !!result2.text,
-        textLength: result2.text?.length || 0,
-        textPreview: result2.text?.substring(0, 100) || "N/A"
-      });
-
-      if (result2.candidates && result2.candidates.length > 0) {
-        const result2Content = result2.candidates[0].content;
-        console.log("[Service] result2.candidates[0].content:", {
-          role: result2Content.role,
-          partsCount: result2Content.parts?.length || 0,
-          hasParts: !!result2Content.parts,
-          partsType: Array.isArray(result2Content.parts) ? 'array' : typeof result2Content.parts
-        });
-        
-        // Детальный вывод структуры content для отладки
-        console.log("[Service] result2.candidates[0].content полная структура:", JSON.stringify(result2Content, null, 2).substring(0, 1000));
-
-        if (result2Content.parts) {
-          const textParts = result2Content.parts.filter(p => p.text);
-          const functionCallParts = result2Content.parts.filter(p => p.functionCall);
           
-          console.log("[Service] result2 parts breakdown:", {
-            totalParts: result2Content.parts.length,
-            textPartsCount: textParts.length,
-            functionCallPartsCount: functionCallParts.length
-          });
-
-          if (textParts.length > 0) {
-            console.log("[Service] Text parts found:", textParts.map(p => ({
-              textLength: p.text?.length || 0,
-              textPreview: p.text?.substring(0, 100) || "N/A"
-            })));
-          }
-
-          if (functionCallParts.length > 0) {
-            console.log("[Service] FunctionCall parts found:", functionCallParts.map(p => ({
-              functionName: p.functionCall?.name || "N/A",
-              functionId: p.functionCall?.id || "N/A"
-            })));
-            console.warn("[Service] ⚠️ Второй ответ содержит functionCall вместо текста!");
-          }
-
-          // Извлекаем текст из всех text частей
-          const extractedText = textParts.map(p => p.text).filter(Boolean).join(' ');
-          if (extractedText) {
-            console.log("[Service] ✓ Текст успешно извлечён из parts, длина:", extractedText.length);
-            narrative = extractedText;
-          } else {
-            console.warn("[Service] ⚠️ Не удалось извлечь текст из parts");
-            narrative = result2.text || "Действие обработано (Повествование не сгенерировано).";
-          }
-        } else {
-          console.warn("[Service] ⚠️ result2.candidates[0].content.parts отсутствует");
-          console.log("[Service] Попытка использовать result2.text напрямую:", {
-            hasText: !!result2.text,
-            textLength: result2.text?.length || 0,
-            textValue: result2.text || "undefined/null"
-          });
-          
-          // Попробуем альтернативные способы извлечения текста
-          if (result2.text && result2.text.trim()) {
-            console.log("[Service] ✓ Используем result2.text напрямую");
-            narrative = result2.text;
-          } else {
-            console.warn("[Service] ❌ Не удалось извлечь текст ни одним способом");
-            console.log("[Service] Полная структура result2.candidates[0]:", JSON.stringify(result2.candidates[0], null, 2).substring(0, 1000));
-            narrative = "Действие обработано (Повествование не сгенерировано).";
-          }
+          conversationHistory.push(lastContent);
+          conversationHistory.push({ role: 'user', parts: toolResponseParts });
         }
-      } else {
-        console.warn("[Service] ⚠️ result2.candidates пуст или отсутствует");
-        narrative = result2.text || "Действие обработано (Повествование не сгенерировано).";
       }
 
-    } else {
-      console.log("[Service] No tool calls, using direct text.");
-      narrative = result1.text || "";
+      // Финальный запрос без инструментов — только нарратив
+      const finalResponse = await ai.models.generateContent({
+        model: modelId,
+        contents: conversationHistory,
+        config: {
+          systemInstruction: createSystemInstruction(workingState, true),
+          // Не передаём tools — форсируем генерацию текста
+        },
+      });
+
+      if (finalResponse.candidates && finalResponse.candidates.length > 0) {
+        const finalContent = finalResponse.candidates[0].content;
+        const textParts = finalContent.parts?.filter(p => p.text) || [];
+        narrative = textParts.map(p => p.text).filter(Boolean).join(' ') || finalResponse.text || "";
+      }
+    }
+
+    // Fallback если нарратив пустой
+    if (!narrative) {
+      narrative = toolLogs.length > 0 
+        ? "Действие обработано." 
+        : "Ничего не произошло.";
     }
 
     console.log("[Service] Final result:", {
       narrativeLength: narrative.length,
       narrativePreview: narrative.substring(0, 150),
       toolLogsCount: toolLogs.length,
+      iterations: iteration,
       stateChanged: workingState !== currentState
     });
 
@@ -275,9 +270,9 @@ ${JSON.stringify(normalizedState, null, 2)}
   } catch (error: any) {
     console.error("[Service] Error:", error);
     return {
-        narrative: `СИСТЕМНАЯ ОШИБКА: ${error.message}`,
-        toolLogs: [],
-        newState: currentState
+      narrative: `СИСТЕМНАЯ ОШИБКА: ${error.message}`,
+      toolLogs: [],
+      newState: currentState
     };
   }
 };

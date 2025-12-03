@@ -9,7 +9,7 @@ describe('create_object tool', () => {
   });
 
   describe('Успешные операции', () => {
-    test('успешно создает объект в локации', () => {
+    test('успешно создает объект в локации с JSON атрибутами', () => {
       const state = createTestState();
       const originalState = JSON.parse(JSON.stringify(state));
       const originalObjectsCount = state.objects.length;
@@ -17,7 +17,7 @@ describe('create_object tool', () => {
       const result = createObject.apply(state, {
         name: 'Новый ключ',
         connectionId: 'loc_001',
-        condition: 'ржавый'
+        attributes: '{"condition": "ржавый", "size": "небольшой", "material": "железный"}'
       });
 
       // Проверяем, что объект добавлен
@@ -28,6 +28,8 @@ describe('create_object tool', () => {
       expect(newObject).toBeDefined();
       expect(newObject?.connectionId).toBe('loc_001');
       expect(newObject?.attributes?.condition).toBe('ржавый');
+      expect(newObject?.attributes?.size).toBe('небольшой');
+      expect(newObject?.attributes?.material).toBe('железный');
       expect(newObject?.id).toMatch(/^obj_\d+_[a-z0-9]+$/);
       
       // Проверяем сообщение
@@ -70,7 +72,7 @@ describe('create_object tool', () => {
       const result = createObject.apply(state, {
         name: 'Записка',
         connectionId: 'obj_002', // Внутри ящика
-        condition: 'помятая'
+        attributes: '{"condition": "помятая", "content": "текст на неизвестном языке"}'
       });
 
       expect(result.newState.objects.length).toBe(originalObjectsCount + 1);
@@ -78,10 +80,40 @@ describe('create_object tool', () => {
       const newObject = result.newState.objects.find(o => o.name === 'Записка');
       expect(newObject).toBeDefined();
       expect(newObject?.connectionId).toBe('obj_002');
+      expect(newObject?.attributes?.condition).toBe('помятая');
+      expect(newObject?.attributes?.content).toBe('текст на неизвестном языке');
       
       expect(result.result).toContain('внутри объекта');
       expect(result.result).toContain('Ящик');
       expect(state).toEqual(originalState);
+    });
+
+    test('поддерживает передачу атрибутов как объект (обратная совместимость)', () => {
+      const state = createTestState();
+      
+      const result = createObject.apply(state, {
+        name: 'Меч',
+        connectionId: 'char_001',
+        attributes: { condition: 'новый', type: 'длинный меч', material: 'сталь' }
+      });
+
+      const newObject = result.newState.objects.find(o => o.name === 'Меч');
+      expect(newObject?.attributes?.condition).toBe('новый');
+      expect(newObject?.attributes?.type).toBe('длинный меч');
+      expect(newObject?.attributes?.material).toBe('сталь');
+    });
+
+    test('простая строка в attributes используется как condition', () => {
+      const state = createTestState();
+      
+      const result = createObject.apply(state, {
+        name: 'Камень',
+        connectionId: 'loc_001',
+        attributes: 'тяжёлый и гладкий'
+      });
+
+      const newObject = result.newState.objects.find(o => o.name === 'Камень');
+      expect(newObject?.attributes?.condition).toBe('тяжёлый и гладкий');
     });
 
     test('использует значение по умолчанию для состояния, если не указано', () => {
@@ -106,7 +138,7 @@ describe('create_object tool', () => {
       const result = createObject.apply(state, {
         name: '  Предмет с пробелами  ',
         connectionId: 'loc_001',
-        condition: '  состояние  '
+        attributes: '{"condition": "  состояние  ", "type": "  тип  "}'
       });
 
       // Проверяем, что объект добавлен
@@ -116,6 +148,7 @@ describe('create_object tool', () => {
       const newObject = result.newState.objects[result.newState.objects.length - 1];
       expect(newObject?.name).toBe('Предмет с пробелами');
       expect(newObject?.attributes?.condition).toBe('состояние');
+      expect(newObject?.attributes?.type).toBe('тип');
     });
 
     test('генерирует уникальный ID для каждого объекта', () => {
@@ -361,16 +394,19 @@ describe('create_object tool', () => {
       expect(result.result).toContain('Ящик');
     });
 
-    test('сообщение содержит состояние объекта', () => {
+    test('сообщение содержит атрибуты объекта', () => {
       const state = createTestState();
       
       const result = createObject.apply(state, {
         name: 'Предмет',
         connectionId: 'loc_001',
-        condition: 'сломан'
+        attributes: '{"condition": "сломан", "size": "большой"}'
       });
 
+      expect(result.result).toContain('condition');
       expect(result.result).toContain('сломан');
+      expect(result.result).toContain('size');
+      expect(result.result).toContain('большой');
     });
   });
 
@@ -389,13 +425,26 @@ describe('create_object tool', () => {
       expect(newObject?.name).toBe(longName);
     });
 
-    test('работает с пустой строкой как state (использует значение по умолчанию)', () => {
+    test('работает с пустой строкой атрибутов (использует значение по умолчанию)', () => {
       const state = createTestState();
       
       const result = createObject.apply(state, {
         name: 'Предмет',
         connectionId: 'loc_001',
-        condition: ''
+        attributes: ''
+      });
+
+      const newObject = result.newState.objects.find(o => o.name === 'Предмет');
+      expect(newObject?.attributes?.condition).toBe('в хорошем состоянии');
+    });
+
+    test('работает с пустым JSON объектом (использует значение по умолчанию)', () => {
+      const state = createTestState();
+      
+      const result = createObject.apply(state, {
+        name: 'Предмет',
+        connectionId: 'loc_001',
+        attributes: '{}'
       });
 
       const newObject = result.newState.objects.find(o => o.name === 'Предмет');

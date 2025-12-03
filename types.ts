@@ -43,6 +43,7 @@ export interface ToolCallLog {
   name: string;
   args: any;
   result: string;
+  iteration: number; // Номер итерации (шага) в многоходовом цикле
 }
 
 export interface SimulationResult {

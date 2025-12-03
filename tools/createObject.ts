@@ -5,7 +5,7 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "create_object",
-    description: "Создать новый объект в мире игры. Используй когда в нарративе появляется новый предмет, который логично должен существовать (найденный предмет, результат действия, упомянутый объект).",
+    description: "Создать новый объект в мире игры. Используй когда в нарративе появляется новый предмет, который логично должен существовать (найденный предмет, результат действия, упомянутый объект). Можно сразу задать несколько атрибутов для полного описания объекта.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -17,16 +17,16 @@ const tool: GameTool = {
           type: Type.STRING, 
           description: "ID владельца/контейнера: ID игрока (объект у него), ID локации (лежит там), или ID другого объекта (внутри контейнера)." 
         },
-        condition: { 
-          type: Type.STRING, 
-          description: "Начальное состояние объекта в виде нарративного описания (напр. 'новый и блестящий', 'почти сломан', 'закрыт на ключ'). По умолчанию 'в хорошем состоянии'." 
+        attributes: { 
+          type: Type.STRING,
+          description: "JSON объект с атрибутами в формате {\"ключ\": \"значение\"}. Примеры атрибутов: condition (состояние), type (тип), size (размер), material (материал), appearance (внешний вид), smell (запах), content (содержимое), feature (особенность), quality (качество), durability (прочность). Все значения должны быть нарративными описаниями. Пример: {\"condition\": \"ржавый\", \"size\": \"небольшой\", \"material\": \"железный\"}"
         },
       },
       required: ["name", "connectionId"],
     },
   },
   apply: (state: GameState, args: any) => {
-    const { name, connectionId, condition = "в хорошем состоянии" } = args;
+    const { name, connectionId, attributes: attributesArg } = args;
     
     // Валидация обязательных полей
     if (!name || !connectionId) {
@@ -63,14 +63,43 @@ const tool: GameTool = {
       };
     }
     
+    // Парсим атрибуты - поддерживаем JSON строку и объект
+    const normalizedAttributes: Record<string, string> = {};
+    let parsedAttributes: any = null;
+    
+    if (attributesArg) {
+      if (typeof attributesArg === 'string') {
+        try {
+          parsedAttributes = JSON.parse(attributesArg);
+        } catch (e) {
+          // Если не удалось распарсить как JSON, считаем это значением condition
+          normalizedAttributes.condition = attributesArg.trim();
+        }
+      } else if (typeof attributesArg === 'object') {
+        parsedAttributes = attributesArg;
+      }
+    }
+    
+    // Нормализуем распарсенные атрибуты
+    if (parsedAttributes && typeof parsedAttributes === 'object') {
+      for (const [key, value] of Object.entries(parsedAttributes)) {
+        if (value !== undefined && value !== null && value !== '') {
+          normalizedAttributes[key] = String(value).trim();
+        }
+      }
+    }
+    
+    // Если атрибуты не переданы, добавляем condition по умолчанию
+    if (Object.keys(normalizedAttributes).length === 0) {
+      normalizedAttributes.condition = "в хорошем состоянии";
+    }
+    
     // Создание нового объекта
     const newObject = {
       id: newId,
       name: name.trim(),
       connectionId: connectionId,
-      attributes: {
-        condition: condition.trim() || "в хорошем состоянии"
-      }
+      attributes: normalizedAttributes
     };
     
     // Добавление в массив объектов
@@ -86,9 +115,14 @@ const tool: GameTool = {
       locationInfo = `внутри объекта "${targetObject.name}"`;
     }
     
+    // Формируем список атрибутов для результата
+    const attrList = Object.entries(normalizedAttributes)
+      .map(([k, v]) => `${k}: "${v}"`)
+      .join(', ');
+    
     return { 
       newState: clonedState, 
-      result: `Создан новый объект "${name}" (${newId}) ${locationInfo}. Состояние: "${condition}".` 
+      result: `Создан новый объект "${name}" (${newId}) ${locationInfo}. Атрибуты: ${attrList}.` 
     };
   }
 };

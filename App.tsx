@@ -395,25 +395,49 @@ const App: React.FC = () => {
                         </div>
 
                         <div className="mb-6">
-                            <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-2 tracking-wider">Лог инструментов</h4>
+                            <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-2 tracking-wider">
+                                Лог инструментов
+                                {lastResult.toolLogs.length > 0 && (
+                                    <span className="ml-2 text-gray-600 font-normal">
+                                        ({lastResult.toolLogs.length} вызов{lastResult.toolLogs.length === 1 ? '' : lastResult.toolLogs.length < 5 ? 'а' : 'ов'}, {Math.max(...lastResult.toolLogs.map(l => l.iteration ?? 0)) + 1} шаг{Math.max(...lastResult.toolLogs.map(l => l.iteration ?? 0)) === 0 ? '' : Math.max(...lastResult.toolLogs.map(l => l.iteration ?? 0)) < 4 ? 'а' : 'ов'})
+                                    </span>
+                                )}
+                            </h4>
                             <div className="space-y-2">
                                 {lastResult.toolLogs.length === 0 ? (
                                     <div className="text-xs text-gray-600 italic">Инструменты не использовались.</div>
                                 ) : (
-                                    lastResult.toolLogs.map((log, idx) => (
-                                        <div key={idx} className="text-xs bg-black rounded p-2 font-mono border border-gray-800">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-blue-500 font-bold">FN:</span>
-                                                <span className="text-gray-300">{log.name}</span>
-                                            </div>
-                                            <div className="text-gray-500 mb-1 break-all pl-6">
-                                                ARGS: {JSON.stringify(log.args)}
-                                            </div>
-                                            <div className="text-green-600/80 break-all pl-6">
-                                                RES: {log.result}
-                                            </div>
-                                        </div>
-                                    ))
+                                    lastResult.toolLogs.map((log, idx, arr) => {
+                                        const currentIteration = log.iteration ?? 0;
+                                        const prevIteration = idx > 0 ? (arr[idx - 1].iteration ?? 0) : -1;
+                                        const showIterationHeader = currentIteration !== prevIteration;
+                                        
+                                        return (
+                                            <React.Fragment key={idx}>
+                                                {showIterationHeader && (
+                                                    <div className="flex items-center gap-2 mt-3 first:mt-0">
+                                                        <div className="h-px flex-1 bg-gray-700"></div>
+                                                        <span className="text-[9px] font-bold text-yellow-500/80 uppercase tracking-wider px-2">
+                                                            Шаг {currentIteration + 1}
+                                                        </span>
+                                                        <div className="h-px flex-1 bg-gray-700"></div>
+                                                    </div>
+                                                )}
+                                                <div className="text-xs bg-black rounded p-2 font-mono border border-gray-800">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-blue-500 font-bold">FN:</span>
+                                                        <span className="text-gray-300">{log.name}</span>
+                                                    </div>
+                                                    <div className="text-gray-500 mb-1 break-all pl-6">
+                                                        ARGS: {JSON.stringify(log.args)}
+                                                    </div>
+                                                    <div className="text-green-600/80 break-all pl-6">
+                                                        RES: {log.result}
+                                                    </div>
+                                                </div>
+                                            </React.Fragment>
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
