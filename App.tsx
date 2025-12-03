@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GameState, SimulationResult, WorldData, LocationData, PlayerData, ObjectData, AISettings, DEFAULT_AI_SETTINGS, AVAILABLE_MODELS } from './types';
 import { INITIAL_STATE } from './constants';
 import { ALL_TOOLS } from './tools/index';
-import { processGameTurn, DEFAULT_SYSTEM_PROMPT } from './services/geminiService';
+import { processGameTurn, DEFAULT_SYSTEM_PROMPT, DEFAULT_NARRATIVE_PROMPT } from './services/geminiService';
 import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor, ConnectionTarget, LocationOption } from './components/FormEditors';
 import DiffView from './components/DiffView';
 import { saveDataFiles } from './utils/dataExporter';
@@ -522,7 +522,7 @@ const App: React.FC = () => {
                   {/* System Prompt Override */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт (симуляция)</label>
                       {aiSettings.systemPromptOverride && (
                         <button
                           type="button"
@@ -545,6 +545,120 @@ const App: React.FC = () => {
                     <p className="text-[9px] text-gray-600 mt-1">
                       {aiSettings.systemPromptOverride ? '✏️ Используется кастомный промпт' : '📄 Используется стандартный промпт'}
                     </p>
+                  </div>
+
+                  {/* Разделитель для нарративных настроек */}
+                  <div className="border-t border-gray-700 pt-4 mt-4">
+                    <h3 className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-3">
+                      🎭 Настройки для нарратива (финальный запрос)
+                    </h3>
+                    <p className="text-[9px] text-gray-500 mb-3">
+                      Если не заданы, используются настройки симуляции выше
+                    </p>
+
+                    {/* Narrative Model Selection */}
+                    <div className="mb-4">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Модель для нарратива: <span className="text-cyan-400">
+                          {aiSettings.narrativeModelId || aiSettings.modelId}
+                        </span>
+                      </label>
+                      <select
+                        value={aiSettings.narrativeModelId || ''}
+                        onChange={(e) => setAiSettings(prev => ({ 
+                          ...prev, 
+                          narrativeModelId: e.target.value || undefined 
+                        }))}
+                        className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="">Использовать модель симуляции</option>
+                        {AVAILABLE_MODELS.map(model => (
+                          <option key={model.id} value={model.id}>{model.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Narrative Temperature */}
+                    <div className="mb-4">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Temperature для нарратива: <span className="text-cyan-400">
+                          {(aiSettings.narrativeTemperature ?? aiSettings.temperature).toFixed(1)}
+                        </span>
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={aiSettings.narrativeTemperature ?? aiSettings.temperature}
+                        onChange={(e) => setAiSettings(prev => ({ 
+                          ...prev, 
+                          narrativeTemperature: parseFloat(e.target.value) === prev.temperature ? undefined : parseFloat(e.target.value)
+                        }))}
+                        className="w-full accent-cyan-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-gray-600">
+                        <span>0 (точный)</span>
+                        <span>1</span>
+                        <span>2 (креативный)</span>
+                      </div>
+                    </div>
+
+                    {/* Narrative Thinking Budget */}
+                    <div className="mb-4">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                        Thinking Budget для нарратива: <span className="text-cyan-400">
+                          {aiSettings.narrativeThinkingBudget ?? aiSettings.thinkingBudget}
+                        </span> токенов
+                      </label>
+                      <input
+                        type="range"
+                        min="512"
+                        max="8192"
+                        step="512"
+                        value={aiSettings.narrativeThinkingBudget ?? aiSettings.thinkingBudget}
+                        onChange={(e) => setAiSettings(prev => ({ 
+                          ...prev, 
+                          narrativeThinkingBudget: parseInt(e.target.value) === prev.thinkingBudget ? undefined : parseInt(e.target.value)
+                        }))}
+                        className="w-full accent-cyan-500"
+                      />
+                      <div className="flex justify-between text-[9px] text-gray-600">
+                        <span>512</span>
+                        <span>4096</span>
+                        <span>8192</span>
+                      </div>
+                    </div>
+
+                    {/* Narrative System Prompt Override */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт для нарратива</label>
+                        {aiSettings.narrativePromptOverride && (
+                          <button
+                            type="button"
+                            onClick={() => setAiSettings(prev => ({ ...prev, narrativePromptOverride: undefined }))}
+                            className="text-[9px] px-2 py-0.5 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                          >
+                            Сбросить
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        value={aiSettings.narrativePromptOverride ?? DEFAULT_NARRATIVE_PROMPT}
+                        onChange={(e) => setAiSettings(prev => ({ 
+                          ...prev, 
+                          narrativePromptOverride: e.target.value === DEFAULT_NARRATIVE_PROMPT ? undefined : e.target.value 
+                        }))}
+                        className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none"
+                        placeholder="Системный промпт для нарратива..."
+                      />
+                      <p className="text-[9px] text-gray-600 mt-1">
+                        {aiSettings.narrativePromptOverride 
+                          ? '✏️ Используется кастомный промпт для нарратива' 
+                          : '📄 Используется стандартный промпт для нарратива'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -640,7 +754,166 @@ const App: React.FC = () => {
                              </p>
                         </div>
 
-                        {lastResult.thinking && (
+                        {/* Мысли симуляции */}
+                        {(lastResult.simulationThinking || lastResult.simulationDebugInfo) && (
+                            <div className="mb-6">
+                                <details className="group">
+                                    <summary className="cursor-pointer list-none">
+                                        <div className="flex items-center gap-2 text-[10px] font-bold text-cyan-500/70 uppercase tracking-wider mb-2 hover:text-cyan-400 transition-colors">
+                                            <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                            <span>⚙️ Мысли модели (симуляция)</span>
+                                            {lastResult.simulationThinking && (
+                                                <span className="text-gray-600 font-normal lowercase">({lastResult.simulationThinking.length} символов)</span>
+                                            )}
+                                        </div>
+                                    </summary>
+                                    <div className="bg-cyan-950/20 rounded-lg p-3 border border-cyan-900/30 mt-2 space-y-4">
+                                        {lastResult.simulationThinking && (
+                                            <div>
+                                                <h5 className="text-[9px] font-bold text-cyan-400 uppercase mb-2">Мысли модели:</h5>
+                                                <p className="text-cyan-200/60 text-xs leading-relaxed whitespace-pre-wrap font-mono">
+                                                    {lastResult.simulationThinking}
+                                                </p>
+                                            </div>
+                                        )}
+                                        
+                                        {lastResult.simulationDebugInfo && (
+                                            <div className="border-t border-cyan-900/50 pt-3 mt-3">
+                                                <h5 className="text-[9px] font-bold text-cyan-400 uppercase mb-2">🔧 Техническая информация:</h5>
+                                                
+                                                {lastResult.simulationDebugInfo.responseStructure && (
+                                                    <div className="mb-3">
+                                                        <p className="text-[9px] text-cyan-300/70 mb-1">
+                                                            <strong>Структура ответа:</strong> {lastResult.simulationDebugInfo.responseStructure.totalParts} частей
+                                                        </p>
+                                                        <div className="text-[8px] text-cyan-200/50 font-mono space-y-1">
+                                                            {lastResult.simulationDebugInfo.responseStructure.partTypes.map((part: any, idx: number) => (
+                                                                <div key={idx} className="flex gap-2">
+                                                                    <span>Часть {idx + 1}:</span>
+                                                                    {part.hasText && <span className="text-green-400">text</span>}
+                                                                    {part.hasThought && <span className="text-yellow-400">thought</span>}
+                                                                    {part.hasFunctionCall && <span className="text-red-400">functionCall</span>}
+                                                                    {part.textLength > 0 && <span>({part.textLength} символов)</span>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {lastResult.simulationDebugInfo.functionCallsCount !== undefined && (
+                                                    <p className="text-[9px] text-cyan-300/70 mb-3">
+                                                        <strong>Вызовов инструментов:</strong> {lastResult.simulationDebugInfo.functionCallsCount}
+                                                    </p>
+                                                )}
+                                                
+                                                {lastResult.simulationDebugInfo.allParts && lastResult.simulationDebugInfo.allParts.length > 0 && (
+                                                    <details className="mt-2">
+                                                        <summary className="text-[9px] text-cyan-400/70 cursor-pointer hover:text-cyan-300">
+                                                            Показать все части ответа ({lastResult.simulationDebugInfo.allParts.length})
+                                                        </summary>
+                                                        <div className="mt-2 space-y-2">
+                                                            {lastResult.simulationDebugInfo.allParts.map((part: any, idx: number) => (
+                                                                <div key={idx} className="bg-black/30 rounded p-2 border border-cyan-900/30">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-[8px] font-bold text-cyan-400">{part.type.toUpperCase()}</span>
+                                                                        <span className="text-[8px] text-gray-500">({part.length} символов)</span>
+                                                                    </div>
+                                                                    <pre className="text-[8px] text-cyan-200/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
+                                                                        {part.content.substring(0, 500)}{part.content.length > 500 ? '...' : ''}
+                                                                    </pre>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </details>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </details>
+                            </div>
+                        )}
+
+                        {/* Мысли нарратива */}
+                        {(lastResult.narrativeThinking || lastResult.narrativeDebugInfo) && (
+                            <div className="mb-6">
+                                <details className="group">
+                                    <summary className="cursor-pointer list-none">
+                                        <div className="flex items-center gap-2 text-[10px] font-bold text-purple-500/70 uppercase tracking-wider mb-2 hover:text-purple-400 transition-colors">
+                                            <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                            <span>🎭 Мысли модели (нарратив)</span>
+                                            {lastResult.narrativeThinking && (
+                                                <span className="text-gray-600 font-normal lowercase">({lastResult.narrativeThinking.length} символов)</span>
+                                            )}
+                                        </div>
+                                    </summary>
+                                    <div className="bg-purple-950/20 rounded-lg p-3 border border-purple-900/30 mt-2 space-y-4">
+                                        {lastResult.narrativeThinking && (
+                                            <div>
+                                                <h5 className="text-[9px] font-bold text-purple-400 uppercase mb-2">Мысли модели:</h5>
+                                                <p className="text-purple-200/60 text-xs leading-relaxed whitespace-pre-wrap font-mono">
+                                                    {lastResult.narrativeThinking}
+                                                </p>
+                                            </div>
+                                        )}
+                                        
+                                        {lastResult.narrativeDebugInfo && (
+                                            <div className="border-t border-purple-900/50 pt-3 mt-3">
+                                                <h5 className="text-[9px] font-bold text-purple-400 uppercase mb-2">🔧 Техническая информация:</h5>
+                                                
+                                                {lastResult.narrativeDebugInfo.responseStructure && (
+                                                    <div className="mb-3">
+                                                        <p className="text-[9px] text-purple-300/70 mb-1">
+                                                            <strong>Структура ответа:</strong> {lastResult.narrativeDebugInfo.responseStructure.totalParts} частей
+                                                        </p>
+                                                        <div className="text-[8px] text-purple-200/50 font-mono space-y-1">
+                                                            {lastResult.narrativeDebugInfo.responseStructure.partTypes.map((part: any, idx: number) => (
+                                                                <div key={idx} className="flex gap-2">
+                                                                    <span>Часть {idx + 1}:</span>
+                                                                    {part.hasText && <span className="text-green-400">text</span>}
+                                                                    {part.hasThought && <span className="text-yellow-400">thought</span>}
+                                                                    {part.hasFunctionCall && <span className="text-red-400">functionCall</span>}
+                                                                    {part.textLength > 0 && <span>({part.textLength} символов)</span>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                
+                                                {lastResult.narrativeDebugInfo.functionCallsCount !== undefined && (
+                                                    <p className="text-[9px] text-purple-300/70 mb-3">
+                                                        <strong>Вызовов инструментов:</strong> {lastResult.narrativeDebugInfo.functionCallsCount}
+                                                    </p>
+                                                )}
+                                                
+                                                {lastResult.narrativeDebugInfo.allParts && lastResult.narrativeDebugInfo.allParts.length > 0 && (
+                                                    <details className="mt-2">
+                                                        <summary className="text-[9px] text-purple-400/70 cursor-pointer hover:text-purple-300">
+                                                            Показать все части ответа ({lastResult.narrativeDebugInfo.allParts.length})
+                                                        </summary>
+                                                        <div className="mt-2 space-y-2">
+                                                            {lastResult.narrativeDebugInfo.allParts.map((part: any, idx: number) => (
+                                                                <div key={idx} className="bg-black/30 rounded p-2 border border-purple-900/30">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-[8px] font-bold text-purple-400">{part.type.toUpperCase()}</span>
+                                                                        <span className="text-[8px] text-gray-500">({part.length} символов)</span>
+                                                                    </div>
+                                                                    <pre className="text-[8px] text-purple-200/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
+                                                                        {part.content.substring(0, 500)}{part.content.length > 500 ? '...' : ''}
+                                                                    </pre>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </details>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </details>
+                            </div>
+                        )}
+
+                        {/* Обратная совместимость: старый блок thinking, если новые поля не заполнены */}
+                        {!lastResult.simulationThinking && !lastResult.narrativeThinking && lastResult.thinking && (
                             <div className="mb-6">
                                 <details className="group">
                                     <summary className="cursor-pointer list-none">

@@ -50,7 +50,43 @@ export interface SimulationResult {
   narrative: string;
   toolLogs: ToolCallLog[];
   newState: GameState;
-  thinking?: string; // Мысли модели (reasoning)
+  thinking?: string; // Мысли модели (reasoning) - устаревшее, используйте simulationThinking и narrativeThinking
+  simulationThinking?: string; // Мысли модели во время симуляции (вызов инструментов)
+  narrativeThinking?: string; // Мысли модели во время генерации нарратива
+  simulationDebugInfo?: {
+    responseStructure?: {
+      totalParts: number;
+      partTypes: Array<{
+        hasText: boolean;
+        hasThought: boolean;
+        hasFunctionCall: boolean;
+        textLength: number;
+      }>;
+    };
+    functionCallsCount?: number;
+    allParts?: Array<{
+      type: 'text' | 'thought' | 'functionCall' | 'unknown';
+      content: string;
+      length: number;
+    }>;
+  };
+  narrativeDebugInfo?: {
+    responseStructure?: {
+      totalParts: number;
+      partTypes: Array<{
+        hasText: boolean;
+        hasThought: boolean;
+        hasFunctionCall: boolean;
+        textLength: number;
+      }>;
+    };
+    functionCallsCount?: number;
+    allParts?: Array<{
+      type: 'text' | 'thought' | 'functionCall' | 'unknown';
+      content: string;
+      length: number;
+    }>;
+  };
 }
 
 // Настройки AI
@@ -60,13 +96,21 @@ export interface AISettings {
   temperature: number;
   thinkingBudget: number;
   systemPromptOverride?: string; // Если задан, заменяет стандартный промпт
+  
+  // Настройки для финального нарративного запроса (опционально)
+  narrativeModelId?: string; // Если не задан, используется modelId
+  narrativeTemperature?: number; // Если не задан, используется temperature
+  narrativeThinkingBudget?: number; // Если не задан, используется thinkingBudget
+  narrativePromptOverride?: string; // Если задан, используется вместо systemPromptOverride для нарратива
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
-  modelId: 'gemini-2.5-flash',
+  modelId: 'gemini-2.5-pro', // Pro модель для симуляции (более точная логика)
   maxIterations: 5,
-  temperature: 0.7,
+  temperature: 0.0, // Низкая температура для точной симуляции
   thinkingBudget: 2048,
+  narrativeModelId: 'gemini-2.5-flash', // Flash модель для нарратива (быстрее и дешевле)
+  narrativeTemperature: 1.0, // Высокая температура для креативного нарратива
 };
 
 export const AVAILABLE_MODELS = [
