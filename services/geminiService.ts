@@ -4,17 +4,29 @@ import { normalizeState } from "../utils/gameUtils";
 
 // Цены на токены для разных моделей Gemini (за 1 миллион токенов)
 // Источник: https://ai.google.dev/pricing (актуализировать при необходимости)
+// 
+// ВАЖНО: Идентификаторы моделей добавлены на основе скриншота Google AI Studio.
+// Необходимо проверить через реальный API, какие идентификаторы работают:
+// - Работают ли алиасы типа "gemini-flash-latest" или нужно использовать полные имена
+// - Правильность идентификаторов "gemini-2.5-flash" и "gemini-2.5-flash-lite"
+// - Если модель не найдена, API вернет ошибку - нужно будет скорректировать идентификаторы
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   // Gemini 2.5 Pro - advanced reasoning model
-  'gemini-2.5-pro': { input: 1.25, output: 10.00 }, // <=200K tokens: $1.25/$10.00 per 1M
+  // <=200K tokens: $1.25/$10.00 per 1M, >200K: $2.50/$15.00 per 1M
+  // Используем базовую цену для <=200K
+  'gemini-2.5-pro': { input: 1.25, output: 10.00 },
   
   // Gemini 2.5 Flash - hybrid reasoning with 1M context
-  'gemini-2.5-flash': { input: 0.30, output: 2.50 }, // $0.30/$2.50 per 1M
-  'gemini-flash-latest': { input: 0.30, output: 2.50 }, // points to gemini-2.5-flash-preview
+  'gemini-2.5-flash': { input: 0.30, output: 2.50 },
+  // Алиас указывает на preview версию (проверить, работает ли алиас в API)
+  'gemini-flash-latest': { input: 0.30, output: 2.50 }, // points to gemini-2.5-flash-preview-09-2025
+  'gemini-2.5-flash-preview-09-2025': { input: 0.30, output: 2.50 },
   
   // Gemini 2.5 Flash-Lite - most cost effective
-  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 }, // $0.10/$0.40 per 1M
-  'gemini-flash-lite-latest': { input: 0.10, output: 0.40 }, // points to gemini-2.5-flash-lite-preview
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
+  // Алиас указывает на preview версию (проверить, работает ли алиас в API)
+  'gemini-flash-lite-latest': { input: 0.10, output: 0.40 }, // points to gemini-2.5-flash-lite-preview-09-2025
+  'gemini-2.5-flash-lite-preview-09-2025': { input: 0.10, output: 0.40 },
   
   // Legacy models (deprecated pricing, kept for compatibility)
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },

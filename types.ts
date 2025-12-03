@@ -138,11 +138,15 @@ export const AVAILABLE_MODELS = [
   
   // Gemini 2.5 Flash - hybrid reasoning, 1M context, thinking budgets
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash — $0.30/$2.50 (рекомендуется)' },
-  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50' },
+  // Пробуем алиас, если не работает - использовать полное имя
+  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50 (алиас)' },
+  { id: 'gemini-2.5-flash-preview-09-2025', name: 'Gemini 2.5 Flash Preview — $0.30/$2.50' },
   
   // Gemini 2.5 Flash-Lite - most cost effective
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite — $0.10/$0.40 (самая дешёвая)' },
-  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest — $0.10/$0.40' },
+  // Пробуем алиас, если не работает - использовать полное имя
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest — $0.10/$0.40 (алиас)' },
+  { id: 'gemini-2.5-flash-lite-preview-09-2025', name: 'Gemini 2.5 Flash-Lite Preview — $0.10/$0.40' },
   
   // Legacy models
   { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (legacy)' },
