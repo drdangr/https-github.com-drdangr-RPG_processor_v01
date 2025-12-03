@@ -115,12 +115,14 @@ export interface AISettings {
   temperature: number;
   thinkingBudget: number;
   systemPromptOverride?: string; // Если задан, заменяет стандартный промпт
+  systemPromptPresetId?: string; // ID выбранного пресета для симуляции
   
   // Настройки для финального нарративного запроса (опционально)
   narrativeModelId?: string; // Если не задан, используется modelId
   narrativeTemperature?: number; // Если не задан, используется temperature
   narrativeThinkingBudget?: number; // Если не задан, используется thinkingBudget
   narrativePromptOverride?: string; // Если задан, используется вместо systemPromptOverride для нарратива
+  narrativePromptPresetId?: string; // ID выбранного пресета для нарратива
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {

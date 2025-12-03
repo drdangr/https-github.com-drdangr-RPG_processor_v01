@@ -7,6 +7,7 @@ import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor, ConnectionT
 import DiffView from './components/DiffView';
 import { saveDataFiles } from './utils/dataExporter';
 import { normalizeState } from './utils/gameUtils';
+import { getAllPresets, addCustomPreset, deleteCustomPreset, getPresetById, PromptPreset } from './utils/promptPresets';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
@@ -23,6 +24,32 @@ const App: React.FC = () => {
   // AI Settings state
   const [aiSettings, setAiSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
   const [middleTab, setMiddleTab] = useState<'tools' | 'settings'>('tools');
+  
+  // Presets management state
+  const [showPresetModal, setShowPresetModal] = useState<{ type: 'simulation' | 'narrative' | null }>({ type: null });
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetDescription, setNewPresetDescription] = useState('');
+  const [newPresetPrompt, setNewPresetPrompt] = useState('');
+  
+  // Load presets
+  const [simulationPresets, setSimulationPresets] = useState<PromptPreset[]>(() => getAllPresets('simulation'));
+  const [narrativePresets, setNarrativePresets] = useState<PromptPreset[]>(() => getAllPresets('narrative'));
+  
+  // Refresh presets when needed
+  const refreshPresets = (type: 'simulation' | 'narrative') => {
+    if (type === 'simulation') {
+      setSimulationPresets(getAllPresets('simulation'));
+    } else {
+      setNarrativePresets(getAllPresets('narrative'));
+    }
+  };
+  
+  // Load presets when modal opens
+  useEffect(() => {
+    if (showPresetModal.type) {
+      refreshPresets(showPresetModal.type);
+    }
+  }, [showPresetModal.type]);
 
   // Resizer state for middle column panels
   const [topPanelHeight, setTopPanelHeight] = useState(550); // pixels (larger = smaller input panel)
@@ -519,31 +546,82 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* System Prompt Override */}
+                  {/* System Prompt Override with Presets */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт (симуляция)</label>
-                      {aiSettings.systemPromptOverride && (
+                      <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => setAiSettings(prev => ({ ...prev, systemPromptOverride: undefined }))}
-                          className="text-[9px] px-2 py-0.5 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                          onClick={() => setShowPresetModal({ type: 'simulation' })}
+                          className="text-[9px] px-2 py-0.5 rounded bg-cyan-900/50 text-cyan-300 hover:bg-cyan-800/50"
                         >
-                          Сбросить
+                          Управление пресетами
                         </button>
-                      )}
+                        {(aiSettings.systemPromptOverride || aiSettings.systemPromptPresetId) && (
+                          <button
+                            type="button"
+                            onClick={() => setAiSettings(prev => ({ 
+                              ...prev, 
+                              systemPromptOverride: undefined,
+                              systemPromptPresetId: undefined
+                            }))}
+                            className="text-[9px] px-2 py-0.5 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                          >
+                            Сбросить
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    
+                    {/* Preset Selector */}
+                    <div className="mb-2">
+                      <select
+                        value={aiSettings.systemPromptPresetId || ''}
+                        onChange={(e) => {
+                          const presetId = e.target.value || undefined;
+                          const preset = presetId ? getPresetById('simulation', presetId) : null;
+                          setAiSettings(prev => ({ 
+                            ...prev, 
+                            systemPromptPresetId: presetId,
+                            systemPromptOverride: preset ? preset.prompt : undefined
+                          }));
+                        }}
+                        className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="">Выберите пресет...</option>
+                        {simulationPresets.map(preset => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name} {preset.isCustom ? '(пользовательский)' : ''}
+                            {preset.description ? ` - ${preset.description}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
                     <textarea
                       value={aiSettings.systemPromptOverride ?? DEFAULT_SYSTEM_PROMPT}
-                      onChange={(e) => setAiSettings(prev => ({ 
-                        ...prev, 
-                        systemPromptOverride: e.target.value === DEFAULT_SYSTEM_PROMPT ? undefined : e.target.value 
-                      }))}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const isDefault = value === DEFAULT_SYSTEM_PROMPT;
+                        const currentPreset = aiSettings.systemPromptPresetId ? getPresetById('simulation', aiSettings.systemPromptPresetId) : null;
+                        const isPresetValue = currentPreset && value === currentPreset.prompt;
+                        setAiSettings(prev => ({ 
+                          ...prev, 
+                          systemPromptOverride: isDefault ? undefined : value,
+                          // Сбрасываем пресет, если пользователь вручную редактирует промпт (и он отличается от пресета)
+                          systemPromptPresetId: isDefault || !isPresetValue ? undefined : prev.systemPromptPresetId
+                        }));
+                      }}
                       className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none"
                       placeholder="Системный промпт для AI..."
                     />
                     <p className="text-[9px] text-gray-600 mt-1">
-                      {aiSettings.systemPromptOverride ? '✏️ Используется кастомный промпт' : '📄 Используется стандартный промпт'}
+                      {aiSettings.systemPromptPresetId 
+                        ? `📋 Используется пресет: ${simulationPresets.find(p => p.id === aiSettings.systemPromptPresetId)?.name || 'неизвестно'}`
+                        : aiSettings.systemPromptOverride 
+                        ? '✏️ Используется кастомный промпт' 
+                        : '📄 Используется стандартный промпт'}
                     </p>
                   </div>
 
@@ -630,31 +708,80 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Narrative System Prompt Override */}
+                    {/* Narrative System Prompt Override with Presets */}
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт для нарратива</label>
-                        {aiSettings.narrativePromptOverride && (
+                        <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => setAiSettings(prev => ({ ...prev, narrativePromptOverride: undefined }))}
-                            className="text-[9px] px-2 py-0.5 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                            onClick={() => setShowPresetModal({ type: 'narrative' })}
+                            className="text-[9px] px-2 py-0.5 rounded bg-purple-900/50 text-purple-300 hover:bg-purple-800/50"
                           >
-                            Сбросить
+                            Управление пресетами
                           </button>
-                        )}
+                          {(aiSettings.narrativePromptOverride || aiSettings.narrativePromptPresetId) && (
+                            <button
+                              type="button"
+                              onClick={() => setAiSettings(prev => ({ 
+                                ...prev, 
+                                narrativePromptOverride: undefined,
+                                narrativePromptPresetId: undefined
+                              }))}
+                              className="text-[9px] px-2 py-0.5 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                            >
+                              Сбросить
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      
+                      {/* Preset Selector */}
+                      <div className="mb-2">
+                        <select
+                          value={aiSettings.narrativePromptPresetId || ''}
+                          onChange={(e) => {
+                            const presetId = e.target.value || undefined;
+                            const preset = presetId ? getPresetById('narrative', presetId) : null;
+                            setAiSettings(prev => ({ 
+                              ...prev, 
+                              narrativePromptPresetId: presetId,
+                              narrativePromptOverride: preset ? preset.prompt : undefined
+                            }));
+                          }}
+                          className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">Выберите пресет...</option>
+                          {narrativePresets.map(preset => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name} {preset.isCustom ? '(пользовательский)' : ''}
+                              {preset.description ? ` - ${preset.description}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
                       <textarea
                         value={aiSettings.narrativePromptOverride ?? DEFAULT_NARRATIVE_PROMPT}
-                        onChange={(e) => setAiSettings(prev => ({ 
-                          ...prev, 
-                          narrativePromptOverride: e.target.value === DEFAULT_NARRATIVE_PROMPT ? undefined : e.target.value 
-                        }))}
-                        className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const isDefault = value === DEFAULT_NARRATIVE_PROMPT;
+                          const currentPreset = aiSettings.narrativePromptPresetId ? getPresetById('narrative', aiSettings.narrativePromptPresetId) : null;
+                          const isPresetValue = currentPreset && value === currentPreset.prompt;
+                          setAiSettings(prev => ({ 
+                            ...prev, 
+                            narrativePromptOverride: isDefault ? undefined : value,
+                            // Сбрасываем пресет, если пользователь вручную редактирует промпт (и он отличается от пресета)
+                            narrativePromptPresetId: isDefault || !isPresetValue ? undefined : prev.narrativePromptPresetId
+                          }));
+                        }}
+                        className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-purple-500 resize-none"
                         placeholder="Системный промпт для нарратива..."
                       />
                       <p className="text-[9px] text-gray-600 mt-1">
-                        {aiSettings.narrativePromptOverride 
+                        {aiSettings.narrativePromptPresetId 
+                          ? `📋 Используется пресет: ${narrativePresets.find(p => p.id === aiSettings.narrativePromptPresetId)?.name || 'неизвестно'}`
+                          : aiSettings.narrativePromptOverride 
                           ? '✏️ Используется кастомный промпт для нарратива' 
                           : '📄 Используется стандартный промпт для нарратива'}
                       </p>
@@ -1019,6 +1146,120 @@ const App: React.FC = () => {
             </div>
         </section>
       </main>
+      
+      {/* Preset Management Modal */}
+      {showPresetModal.type && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShowPresetModal({ type: null })}>
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-cyan-400">
+                Управление пресетами ({showPresetModal.type === 'simulation' ? 'симуляция' : 'нарратив'})
+              </h2>
+              <button
+                onClick={() => setShowPresetModal({ type: null })}
+                className="text-gray-400 hover:text-white text-xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Existing Presets */}
+            <div className="mb-6">
+              <h3 className="text-sm font-bold text-gray-300 mb-2">Существующие пресеты:</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(showPresetModal.type === 'simulation' ? simulationPresets : narrativePresets).map(preset => (
+                  <div key={preset.id} className="bg-black/40 border border-gray-700 rounded p-3 flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-bold text-cyan-300">{preset.name}</span>
+                        {preset.isCustom && <span className="text-[9px] text-gray-500">(пользовательский)</span>}
+                      </div>
+                      {preset.description && (
+                        <p className="text-xs text-gray-400 mb-2">{preset.description}</p>
+                      )}
+                      <pre className="text-[10px] text-gray-500 font-mono whitespace-pre-wrap max-h-20 overflow-y-auto">
+                        {preset.prompt.substring(0, 200)}{preset.prompt.length > 200 ? '...' : ''}
+                      </pre>
+                    </div>
+                    {preset.isCustom && (
+                      <button
+                        onClick={() => {
+                          deleteCustomPreset(showPresetModal.type!, preset.id);
+                          refreshPresets(showPresetModal.type!);
+                        }}
+                        className="ml-2 text-[9px] px-2 py-1 rounded bg-red-900/50 text-red-300 hover:bg-red-800/50"
+                      >
+                        Удалить
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Add New Preset */}
+            <div className="border-t border-gray-700 pt-4">
+              <h3 className="text-sm font-bold text-gray-300 mb-3">Добавить новый пресет:</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Название
+                  </label>
+                  <input
+                    type="text"
+                    value={newPresetName}
+                    onChange={(e) => setNewPresetName(e.target.value)}
+                    className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500"
+                    placeholder="Название пресета..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Описание (опционально)
+                  </label>
+                  <input
+                    type="text"
+                    value={newPresetDescription}
+                    onChange={(e) => setNewPresetDescription(e.target.value)}
+                    className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-cyan-500"
+                    placeholder="Краткое описание..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Промпт
+                  </label>
+                  <textarea
+                    value={newPresetPrompt}
+                    onChange={(e) => setNewPresetPrompt(e.target.value)}
+                    className="w-full h-48 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none"
+                    placeholder="Введите промпт..."
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    if (newPresetName && newPresetPrompt) {
+                      addCustomPreset(showPresetModal.type!, {
+                        name: newPresetName,
+                        description: newPresetDescription || undefined,
+                        prompt: newPresetPrompt
+                      });
+                      refreshPresets(showPresetModal.type!);
+                      setNewPresetName('');
+                      setNewPresetDescription('');
+                      setNewPresetPrompt('');
+                    }
+                  }}
+                  disabled={!newPresetName || !newPresetPrompt}
+                  className="w-full py-2 bg-cyan-700 hover:bg-cyan-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold rounded text-sm transition-colors"
+                >
+                  Добавить пресет
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
