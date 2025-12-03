@@ -58,30 +58,12 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     }
   },
   {
-    "id": "obj_1764675753500",
-    "name": "Ключик",
-    "connectionId": "char_001",
-    "attributes": {
-      "condition": "в хорошем состоянии",
-      "size": "небольшой"
-    }
-  },
-  {
     "id": "obj_1764693090407",
     "name": "Сундук",
     "connectionId": "loc_001",
     "attributes": {
-      "condition": "открыт",
+      "condition": "заперт ",
       "feature": "имеет отверстие для ключа"
-    }
-  },
-  {
-    "id": "obj_1764693137423",
-    "name": "Ключ от сундука",
-    "connectionId": "char_1764641742185",
-    "attributes": {
-      "condition": "в хорошем состоянии",
-      "size": "большой"
     }
   },
   {
@@ -161,5 +143,11 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "attributes": {
       "condition": "потертый, но крепкий, надетый Джеком"
     }
+  },
+  {
+    "id": "obj_1764789648713",
+    "name": "Ключ от чемодана ",
+    "connectionId": "char_001",
+    "attributes": {}
   }
 ];
