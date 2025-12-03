@@ -1,11 +1,56 @@
 import { GoogleGenAI, Tool, Content, Part } from "@google/genai";
-import { GameState, SimulationResult, ToolCallLog, GameTool, AISettings, DEFAULT_AI_SETTINGS } from "../types";
+import { GameState, SimulationResult, ToolCallLog, GameTool, AISettings, DEFAULT_AI_SETTINGS, TokenUsage, CostInfo } from "../types";
 import { normalizeState } from "../utils/gameUtils";
 
-// Стандартный системный промпт для симуляции (с инструментами)
-export const DEFAULT_SYSTEM_PROMPT = `Ты - продвинутый ИИ Гейм-Мастер (Ведущий). Твоя задача - ТОЛЬКО изменять состояние мира через инструменты.
+// Цены на токены для разных моделей Gemini (за 1 миллион токенов)
+// Источник: https://ai.google.dev/pricing (актуализировать при необходимости)
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-pro': { input: 1.25, output: 5.00 }, // $1.25 за 1M входных, $5.00 за 1M выходных
+  'gemini-2.5-flash': { input: 0.075, output: 0.30 }, // $0.075 за 1M входных, $0.30 за 1M выходных
+  'gemini-2.0-flash': { input: 0.075, output: 0.30 },
+  'gemini-1.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-1.5-pro': { input: 1.25, output: 5.00 },
+};
 
-ЯЗЫК: Думай и отвечай на русском языке.
+// Функция для извлечения информации о токенах из ответа API
+const extractTokenUsage = (response: any): TokenUsage | null => {
+  try {
+    const usageMetadata = response?.usageMetadata;
+    if (!usageMetadata) return null;
+    
+    return {
+      promptTokens: usageMetadata.promptTokenCount || 0,
+      candidatesTokens: usageMetadata.candidatesTokenCount || 0,
+      totalTokens: usageMetadata.totalTokenCount || 0,
+    };
+  } catch (e) {
+    console.warn("[Service] Could not extract token usage:", e);
+    return null;
+  }
+};
+
+// Функция для расчета стоимости на основе модели и токенов
+const calculateCost = (tokenUsage: TokenUsage, modelId: string): CostInfo | null => {
+  const pricing = MODEL_PRICING[modelId];
+  if (!pricing) {
+    console.warn(`[Service] No pricing found for model: ${modelId}`);
+    return null;
+  }
+  
+  const inputCost = (tokenUsage.promptTokens / 1_000_000) * pricing.input;
+  const outputCost = (tokenUsage.candidatesTokens / 1_000_000) * pricing.output;
+  const totalCost = inputCost + outputCost;
+  
+  return {
+    inputCost,
+    outputCost,
+    totalCost,
+    model: modelId,
+  };
+};
+
+// Стандартный системный промпт для симуляции (с инструментами)
+export const DEFAULT_SYSTEM_PROMPT = `Ты - продвинутый ИИ Гейм-Мастер (Ведущий). Твоя задача - изменять состояние мира через инструменты.
 
 ВАЖНО: НЕ генерируй текстовый ответ. ТОЛЬКО вызывай инструменты. Нарратив будет создан отдельно.
 
@@ -18,7 +63,7 @@ export const DEFAULT_SYSTEM_PROMPT = `Ты - продвинутый ИИ Гей�
 6. Перемещай объекты между игроками, локациями и другими объектами.
 7. Можешь вызывать несколько инструментов подряд — например, создать объект, потом переместить его.
 
-Повторяю: ТОЛЬКО инструменты, без текста.`;
+`;
 
 // Стандартный системный промпт для нарратива (художественное описание)
 export const DEFAULT_NARRATIVE_PROMPT = `Ты - талантливый писатель и рассказчик, создающий живые, атмосферные описания событий в игровом мире.
@@ -120,6 +165,10 @@ ${JSON.stringify(normalizedState, null, 2)}
     const narrativeThinkingParts: string[] = []; // Мысли модели во время генерации нарратива
     const simulationDebugInfo: any = { allParts: [], iterations: [] }; // Техническая информация для симуляции
     const narrativeDebugInfo: any = { allParts: [] }; // Техническая информация для нарратива
+    
+    // Сбор информации о токенах
+    const simulationTokenUsages: TokenUsage[] = []; // Токены для каждой итерации симуляции
+    let narrativeTokenUsage: TokenUsage | null = null; // Токены для нарратива
 
     // История сообщений для многоходового диалога
     let conversationHistory: Content[] = [
@@ -283,6 +332,12 @@ ${JSON.stringify(normalizedState, null, 2)}
 
     // Извлекаем мысли из первого ответа (итерация -1 означает первый запрос)
     extractThoughts(response, false, -1);
+    
+    // Извлекаем информацию о токенах из первого ответа
+    const firstTokenUsage = extractTokenUsage(response);
+    if (firstTokenUsage) {
+      simulationTokenUsages.push(firstTokenUsage);
+    }
 
     // Цикл обработки инструментов
     let iteration = 0;
@@ -383,6 +438,12 @@ ${JSON.stringify(normalizedState, null, 2)}
 
       // Извлекаем мысли из ответа (с номером итерации)
       extractThoughts(response, false, iteration);
+      
+      // Извлекаем информацию о токенах из ответа итерации
+      const iterationTokenUsage = extractTokenUsage(response);
+      if (iterationTokenUsage) {
+        simulationTokenUsages.push(iterationTokenUsage);
+      }
 
       iteration++;
     }
@@ -514,6 +575,9 @@ ${JSON.stringify(normalizedState, null, 2)}
     // Извлекаем мысли из финального ответа
     console.log("[Service] 🎭 Extracting thoughts from narrative response...");
     extractThoughts(finalResponse, true);
+    
+    // Извлекаем информацию о токенах из финального ответа
+    narrativeTokenUsage = extractTokenUsage(finalResponse);
 
     if (finalResponse.candidates && finalResponse.candidates.length > 0) {
       const finalContent = finalResponse.candidates[0].content;
@@ -547,6 +611,49 @@ ${JSON.stringify(normalizedState, null, 2)}
       ? [simulationThinking, narrativeThinking].filter(Boolean).join('\n\n=== НАРРАТИВ ===\n\n')
       : undefined;
 
+    // Подсчитываем общее использование токенов для симуляции
+    const totalSimulationTokens: TokenUsage = simulationTokenUsages.reduce(
+      (acc, usage) => ({
+        promptTokens: acc.promptTokens + usage.promptTokens,
+        candidatesTokens: acc.candidatesTokens + usage.candidatesTokens,
+        totalTokens: acc.totalTokens + usage.totalTokens,
+      }),
+      { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 }
+    );
+    
+    // Общее использование токенов (симуляция + нарратив)
+    const totalTokenUsage: TokenUsage = {
+      promptTokens: totalSimulationTokens.promptTokens + (narrativeTokenUsage?.promptTokens || 0),
+      candidatesTokens: totalSimulationTokens.candidatesTokens + (narrativeTokenUsage?.candidatesTokens || 0),
+      totalTokens: totalSimulationTokens.totalTokens + (narrativeTokenUsage?.totalTokens || 0),
+    };
+    
+    // Рассчитываем стоимость
+    // Используем модель симуляции для расчета стоимости симуляции
+    const simulationCost = totalSimulationTokens.totalTokens > 0 
+      ? calculateCost(totalSimulationTokens, modelId) 
+      : null;
+    
+    // Используем модель нарратива для расчета стоимости нарратива (narrativeModelId уже объявлена выше)
+    const narrativeCost = narrativeTokenUsage 
+      ? calculateCost(narrativeTokenUsage, narrativeModelId) 
+      : null;
+    
+    // Общая стоимость
+    let totalCostInfo: CostInfo | undefined = undefined;
+    if (simulationCost && narrativeCost) {
+      totalCostInfo = {
+        inputCost: simulationCost.inputCost + narrativeCost.inputCost,
+        outputCost: simulationCost.outputCost + narrativeCost.outputCost,
+        totalCost: simulationCost.totalCost + narrativeCost.totalCost,
+        model: `${modelId} + ${narrativeModelId}`,
+      };
+    } else if (simulationCost) {
+      totalCostInfo = simulationCost;
+    } else if (narrativeCost) {
+      totalCostInfo = narrativeCost;
+    }
+
     console.log("[Service] Final result:", {
       narrativeLength: narrative.length,
       narrativePreview: narrative.substring(0, 150),
@@ -556,7 +663,13 @@ ${JSON.stringify(normalizedState, null, 2)}
       simulationThinkingLength: simulationThinking?.length || 0,
       hasNarrativeThinking: !!narrativeThinking,
       narrativeThinkingLength: narrativeThinking?.length || 0,
-      stateChanged: workingState !== currentState
+      stateChanged: workingState !== currentState,
+      tokenUsage: {
+        simulation: totalSimulationTokens,
+        narrative: narrativeTokenUsage,
+        total: totalTokenUsage,
+      },
+      costInfo: totalCostInfo,
     });
 
     return {
@@ -566,6 +679,12 @@ ${JSON.stringify(normalizedState, null, 2)}
       thinking, // Для обратной совместимости
       simulationThinking,
       narrativeThinking,
+      tokenUsage: totalTokenUsage.totalTokens > 0 ? {
+        simulation: totalSimulationTokens,
+        narrative: narrativeTokenUsage || { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 },
+        total: totalTokenUsage,
+      } : undefined,
+      costInfo: totalCostInfo,
       simulationDebugInfo: Object.keys(simulationDebugInfo).length > 0 ? simulationDebugInfo : undefined,
       narrativeDebugInfo: Object.keys(narrativeDebugInfo).length > 0 ? narrativeDebugInfo : undefined
     };

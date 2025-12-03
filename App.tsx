@@ -752,6 +752,29 @@ const App: React.FC = () => {
                              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-serif">
                                 {lastResult.narrative}
                              </p>
+                             
+                             {/* Информация о токенах и стоимости */}
+                             {lastResult.costInfo && lastResult.tokenUsage && (
+                                 <div className="mt-4 pt-4 border-t border-gray-700">
+                                     <div className="flex flex-wrap gap-4 text-xs">
+                                         <div className="text-gray-400">
+                                             <span className="font-bold text-cyan-400">Токены:</span>{' '}
+                                             {lastResult.tokenUsage.total.totalTokens.toLocaleString()} 
+                                             {' '}(вход: {lastResult.tokenUsage.total.promptTokens.toLocaleString()}, 
+                                             выход: {lastResult.tokenUsage.total.candidatesTokens.toLocaleString()})
+                                         </div>
+                                         <div className="text-gray-400">
+                                             <span className="font-bold text-green-400">Стоимость:</span>{' '}
+                                             ${lastResult.costInfo.totalCost.toFixed(6)}
+                                             {' '}(вход: ${lastResult.costInfo.inputCost.toFixed(6)}, 
+                                             выход: ${lastResult.costInfo.outputCost.toFixed(6)})
+                                         </div>
+                                         <div className="text-gray-500 text-[10px]">
+                                             Модель: {lastResult.costInfo.model}
+                                         </div>
+                                     </div>
+                                 </div>
+                             )}
                         </div>
 
                         {/* Мысли симуляции */}

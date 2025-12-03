@@ -46,6 +46,19 @@ export interface ToolCallLog {
   iteration: number; // Номер итерации (шага) в многоходовом цикле
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+}
+
+export interface CostInfo {
+  inputCost: number; // Стоимость входных токенов в долларах
+  outputCost: number; // Стоимость выходных токенов в долларах
+  totalCost: number; // Общая стоимость в долларах
+  model: string; // Модель, для которой рассчитана стоимость
+}
+
 export interface SimulationResult {
   narrative: string;
   toolLogs: ToolCallLog[];
@@ -53,6 +66,12 @@ export interface SimulationResult {
   thinking?: string; // Мысли модели (reasoning) - устаревшее, используйте simulationThinking и narrativeThinking
   simulationThinking?: string; // Мысли модели во время симуляции (вызов инструментов)
   narrativeThinking?: string; // Мысли модели во время генерации нарратива
+  tokenUsage?: {
+    simulation: TokenUsage; // Токены использованные в симуляции (все итерации)
+    narrative: TokenUsage; // Токены использованные в нарративе
+    total: TokenUsage; // Общее использование токенов
+  };
+  costInfo?: CostInfo; // Информация о стоимости хода
   simulationDebugInfo?: {
     responseStructure?: {
       totalParts: number;
@@ -106,7 +125,7 @@ export interface AISettings {
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   modelId: 'gemini-2.5-pro', // Pro модель для симуляции (более точная логика)
-  maxIterations: 5,
+  maxIterations: 1,
   temperature: 0.0, // Низкая температура для точной симуляции
   thinkingBudget: 2048,
   narrativeModelId: 'gemini-2.5-flash', // Flash модель для нарратива (быстрее и дешевле)
