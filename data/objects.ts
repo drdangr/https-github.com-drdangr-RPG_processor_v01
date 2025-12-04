@@ -84,7 +84,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "name": "Книга полезных заклинаний",
     "connectionId": "obj_1764693090407",
     "attributes": {
-      "type": "сборник полезных заклинаний",
+      "type": "сборник полезных заклинаний на все случаи жизни",
       "title": "Заклининания для Dummy"
     }
   },
@@ -128,7 +128,9 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "id": "obj_1764789648713",
     "name": "Ключ от от сундука",
     "connectionId": "char_1764641742185",
-    "attributes": {}
+    "attributes": {
+      "position": "болтается на тонкой веревочке на шее у Пью"
+    }
   },
   {
     "id": "obj_1764807474394",
