@@ -48,7 +48,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764644085541_jv8h",
     "name": "Пакетик с травкой",
-    "connectionId": "obj_1764621899013",
+    "connectionId": "obj_1764718477192_s71y",
     "attributes": {
       "condition": "запечатан",
       "size": "небольшой",
@@ -139,7 +139,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764718477192_s71y",
     "name": "Сапог (на столе)",
-    "connectionId": "char_001",
+    "connectionId": "obj_1764817473286",
     "attributes": {
       "condition": "потертый, но крепкий, надетый Джеком"
     }
@@ -176,6 +176,15 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "attributes": {
       "condition": "новая",
       "type": "табачное изделие"
+    }
+  },
+  {
+    "id": "obj_1764817473286",
+    "name": "Письменный стол",
+    "connectionId": "loc_001",
+    "attributes": {
+      "positioning": "в центре кабинета",
+      "description": "массивный дубовый стол"
     }
   }
 ];

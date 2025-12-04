@@ -415,12 +415,89 @@ export const ObjectsEditor: React.FC<{
 }> = ({ data, onChange, onSave, connectionTargets = [] }) => {
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
   
-  // Сортируем объекты по алфавиту по имени
-  const sortedData = [...data].sort((a, b) => {
-    const nameA = (a.name || '').toLowerCase();
-    const nameB = (b.name || '').toLowerCase();
-    return nameA.localeCompare(nameB, 'ru');
+  // Создаем карту всех connectionTargets для быстрого поиска названий
+  const connectionTargetMap = new Map(connectionTargets.map(t => [t.id, t]));
+  
+  // Создаем карту объектов по ID для быстрого поиска
+  const objectsMap = new Map(data.map(obj => [obj.id, obj]));
+  
+  // Находим корневые объекты (подключены к локациям или игрокам) и объекты без связи
+  const rootObjects: ObjectData[] = [];
+  const ungroupedObjects: ObjectData[] = [];
+  const objectsByParent = new Map<string, ObjectData[]>();
+  
+  data.forEach(obj => {
+    if (!obj.connectionId) {
+      ungroupedObjects.push(obj);
+    } else {
+      const target = connectionTargetMap.get(obj.connectionId);
+      if (target && (target.type === 'location' || target.type === 'player')) {
+        // Это корневой объект (подключен к локации или игроку)
+        rootObjects.push(obj);
+      } else {
+        // Это вложенный объект (подключен к другому объекту)
+        const parentId = obj.connectionId;
+        if (!objectsByParent.has(parentId)) {
+          objectsByParent.set(parentId, []);
+        }
+        objectsByParent.get(parentId)!.push(obj);
+      }
+    }
   });
+  
+  // Функция для получения всех дочерних объектов рекурсивно
+  const getChildren = (parentId: string): ObjectData[] => {
+    return objectsByParent.get(parentId) || [];
+  };
+  
+  // Функция для сортировки объектов по алфавиту
+  const sortObjects = (objects: ObjectData[]) => {
+    return [...objects].sort((a, b) => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB, 'ru');
+    });
+  };
+  
+  // Сортируем корневые объекты
+  const sortedRootObjects = sortObjects(rootObjects);
+  
+  // Сортируем объекты без связи
+  const sortedUngroupedObjects = sortObjects(ungroupedObjects);
+  
+  // Сортируем дочерние объекты для каждого родителя
+  objectsByParent.forEach((children, parentId) => {
+    objectsByParent.set(parentId, sortObjects(children));
+  });
+  
+  // Группируем корневые объекты по их connectionId (локация/игрок)
+  const groupedByRoot = new Map<string, ObjectData[]>();
+  sortedRootObjects.forEach(obj => {
+    if (obj.connectionId) {
+      if (!groupedByRoot.has(obj.connectionId)) {
+        groupedByRoot.set(obj.connectionId, []);
+      }
+      groupedByRoot.get(obj.connectionId)!.push(obj);
+    }
+  });
+  
+  // Сортируем группы по названию локации/игрока
+  const sortedGroups = Array.from(groupedByRoot.keys())
+    .map(connectionId => {
+      const target = connectionTargetMap.get(connectionId);
+      const icon = target?.type === 'player' ? '👤' : '📍';
+      return {
+        id: connectionId,
+        name: target?.name || connectionId,
+        icon: icon,
+        objects: groupedByRoot.get(connectionId)!
+      };
+    })
+    .sort((a, b) => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB, 'ru');
+    });
   
   // Преобразуем targets в опции для SelectField и сортируем по алфавиту
   const connectionOptions: SelectOption[] = connectionTargets
@@ -435,27 +512,66 @@ export const ObjectsEditor: React.FC<{
       return labelA.localeCompare(labelB, 'ru');
     });
 
+  // Рекурсивная функция для рендеринга объекта и его вложенных объектов
+  const renderObjectWithChildren = (item: ObjectData, depth: number = 0) => {
+    const originalIndex = data.findIndex(obj => obj.id === item.id);
+    const children = getChildren(item.id);
+    const sortedChildren = sortObjects(children);
+    
+    return (
+      <div key={item.id} className={depth > 0 ? `ml-4 border-l-2 border-gray-700 pl-2` : ''}>
+        <ListItem id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== originalIndex))}>
+           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
+           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
+           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
+           <SelectField 
+             label="Connected To" 
+             value={item.connectionId} 
+             onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }} 
+             options={connectionOptions.filter(opt => opt.id !== item.id)} 
+             placeholder="Выберите владельца/контейнер..."
+             onSave={onSave} 
+           />
+        </ListItem>
+        {/* Рекурсивно рендерим дочерние объекты */}
+        {sortedChildren.length > 0 && (
+          <div className="mt-1">
+            {sortedChildren.map(child => renderObjectWithChildren(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="p-4">
-      <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
-      {sortedData.map((item, i) => {
-        const originalIndex = data.findIndex(obj => obj.id === item.id);
-        return (
-          <ListItem key={item.id} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== originalIndex))}>
-             <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
-             <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
-             <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
-             <SelectField 
-               label="Connected To" 
-               value={item.connectionId} 
-               onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }} 
-               options={connectionOptions.filter(opt => opt.id !== item.id)} 
-               placeholder="Выберите владельца/контейнер..."
-               onSave={onSave} 
-             />
-          </ListItem>
-        );
-      })}
+    <div className="relative">
+      {/* Фиксированная кнопка сверху */}
+      <div className="sticky top-0 z-10 p-4 pb-2 bg-gray-900/50 backdrop-blur-sm border-b border-gray-800">
+        <button type="button" onClick={add} className="w-full py-1 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
+      </div>
+      
+      {/* Контент с отступом */}
+      <div className="p-4 pt-2">
+        {/* Группы по Connected To */}
+        {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => (
+          <div key={connectionId} className="mb-4">
+            <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2 px-1">
+              {icon} {connectionName}
+            </div>
+            {objects.map(obj => renderObjectWithChildren(obj, 0))}
+          </div>
+        ))}
+        
+        {/* Объекты без связи */}
+        {sortedUngroupedObjects.length > 0 && (
+          <div className="mb-4">
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">
+              📦 Без связи
+            </div>
+            {sortedUngroupedObjects.map(obj => renderObjectWithChildren(obj, 0))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
