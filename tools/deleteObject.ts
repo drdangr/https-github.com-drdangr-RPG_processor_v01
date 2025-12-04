@@ -11,7 +11,7 @@ const tool: GameTool = {
       properties: {
         objectId: { 
           type: Type.STRING, 
-          description: "ID объекта для удаления." 
+          description: "Реальный ID объекта из состояния мира (формат: obj_timestamp_suffix, например 'obj_1764794659879_jo28'). Не выдумывай ID - используй только существующие ID из текущего состояния или из результата create_object." 
         },
       },
       required: ["objectId"],

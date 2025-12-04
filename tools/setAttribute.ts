@@ -5,7 +5,7 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "set_attribute",
-    description: "Установить нарративное описание характеристики для игрока, объекта или локации. Характеристика будет создана автоматически, если её нет. Используй богатые, детальные описания вместо цифр (например, 'умирает от жажды' вместо 'health: 10%', 'почти сломан' вместо 'durability: 20%').",
+    description: "Установить нарративное описание характеристики для игрока, объекта или локации. Характеристика будет создана автоматически, если её нет. Используй богатые, детальные описания вместо цифр (например, 'умирает от жажды' вместо 'health: 10%', 'почти сломан' вместо 'durability: 20%'). ВАЖНО: НЕ используй этот инструмент для изменения locationId игрока - для перемещения игроков используй инструмент move_player.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -16,7 +16,7 @@ const tool: GameTool = {
         },
         entityId: {
           type: Type.STRING,
-          description: "ID сущности (playerId, objectId или locationId)."
+          description: "Реальный ID сущности из состояния мира. Для объектов формат: obj_timestamp_suffix. Не выдумывай ID - используй только существующие."
         },
         attributeName: {
           type: Type.STRING,
@@ -69,6 +69,15 @@ const tool: GameTool = {
       return {
         newState: state,
         result: `Ошибка: ${entityType} с ID "${entityId}" не найден`
+      };
+    }
+
+    // КРИТИЧЕСКАЯ ЗАЩИТА: Нельзя изменять locationId через set_attribute
+    // Для перемещения игроков используется специальный инструмент move_player
+    if (entityType === "player" && attributeName === "locationId") {
+      return {
+        newState: state,
+        result: `ОШИБКА: Нельзя изменять locationId игрока через set_attribute! Для перемещения игроков между локациями ВСЕГДА используй инструмент move_player. Это единственный способ перемещения игроков.`
       };
     }
 

@@ -122,7 +122,8 @@ const tool: GameTool = {
     
     return { 
       newState: clonedState, 
-      result: `Создан новый объект "${name}" (${newId}) ${locationInfo}. Атрибуты: ${attrList}.` 
+      result: `Создан новый объект "${name}" (${newId}) ${locationInfo}. Атрибуты: ${attrList}.`,
+      createdId: newId
     };
   }
 };

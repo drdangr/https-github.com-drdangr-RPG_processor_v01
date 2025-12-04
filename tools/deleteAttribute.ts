@@ -16,7 +16,7 @@ const tool: GameTool = {
         },
         entityId: {
           type: Type.STRING,
-          description: "ID сущности (playerId, objectId или locationId)."
+          description: "Реальный ID сущности из состояния мира. Для объектов формат: obj_timestamp_suffix. Не выдумывай ID - используй только существующие."
         },
         attributeName: {
           type: Type.STRING,

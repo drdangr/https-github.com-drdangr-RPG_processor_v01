@@ -146,8 +146,17 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   },
   {
     "id": "obj_1764789648713",
-    "name": "Ключ от чемодана ",
-    "connectionId": "char_001",
+    "name": "Ключ от от сундука",
+    "connectionId": "char_1764641742185",
     "attributes": {}
+  },
+  {
+    "id": "obj_1764807474394",
+    "name": "Книга \"Жизнь детективов\"",
+    "connectionId": "loc_1764698263182",
+    "attributes": {
+      "bookmark": "закладка на главе \"Детективы, как они есть, пьють и спять\"",
+      "description": "занятное чтиво, чтобы скоротать вечер"
+    }
   }
 ];

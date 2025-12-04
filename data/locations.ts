@@ -26,7 +26,7 @@ export const INITIAL_LOCATIONS: LocationData[] = [
     "connections": [
       {
         "targetLocationId": "loc_001",
-        "type": "in"
+        "type": "bidirectional"
       }
     ],
     "attributes": {
@@ -41,7 +41,7 @@ export const INITIAL_LOCATIONS: LocationData[] = [
     "currentSituation": "Очень тихо в воздухе  пыль.",
     "connections": [
       {
-        "targetLocationId": "loc_002",
+        "targetLocationId": "loc_001",
         "type": "bidirectional"
       }
     ],

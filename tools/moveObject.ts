@@ -9,7 +9,7 @@ const tool: GameTool = {
     parameters: {
       type: Type.OBJECT,
       properties: {
-        objectId: { type: Type.STRING, description: "ID объекта для перемещения." },
+        objectId: { type: Type.STRING, description: "Реальный ID объекта из состояния мира (формат: obj_timestamp_suffix). Не выдумывай ID - используй только существующие." },
         targetId: { type: Type.STRING, description: "ID нового владельца/контейнера (Player ID, Location ID или Object ID)." },
       },
       required: ["objectId", "targetId"],

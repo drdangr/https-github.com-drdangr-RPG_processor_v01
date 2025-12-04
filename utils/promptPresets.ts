@@ -5,209 +5,135 @@ export interface PromptPreset {
   name: string;
   description?: string;
   prompt: string;
-  isCustom: boolean; // true для пользовательских пресетов
   type: 'simulation' | 'narrative'; // тип промпта
 }
 
-// Стандартные пресеты для симуляции
-export const DEFAULT_SIMULATION_PRESETS: PromptPreset[] = [
-  {
-    id: 'default',
-    name: 'Стандартный',
-    description: 'Базовый промпт для симуляции игрового мира',
-    prompt: `Ты - продвинутый ИИ Гейм-Мастер (Ведущий). Твоя задача - изменять состояние мира через инструменты.
-
-ВАЖНО: НЕ генерируй текстовый ответ. ТОЛЬКО вызывай инструменты. Нарратив будет создан отдельно.
-
-Правила:
-1. Учитывай текущее состояние мира (JSON).
-2. Мир построен на правилах и законах, вытекающих из его описания и жанра игры. Следуй им.
-3. Используй инструменты для изменения состояния мира, игроков, объектов и локаций через атрибуты.
-4. Создавай новые объекты, если это логично следует из действий игрока.
-5. Удаляй объекты, которые перестали существовать.
-6. Перемещай объекты между игроками, локациями и другими объектами.
-7. Можешь вызывать несколько инструментов подряд — например, создать объект, потом переместить его.
-
-`,
-    isCustom: false,
-    type: 'simulation'
-  },
-  {
-    id: 'strict',
-    name: 'Строгий',
-    description: 'Строгий режим - только логичные и обоснованные действия',
-    prompt: `Ты - строгий ИИ Гейм-Мастер. Твоя задача - изменять состояние мира через инструменты, но ТОЛЬКО если действие логически возможно.
-
-ВАЖНО: НЕ генерируй текстовый ответ. ТОЛЬКО вызывай инструменты. Нарратив будет создан отдельно.
-
-Строгие правила:
-1. Перед вызовом инструмента проверь, возможно ли действие в текущем состоянии мира.
-2. Если действие невозможно (например, объект заперт, персонаж не имеет нужного предмета) - НЕ вызывай инструмент.
-3. Учитывай физические законы и логику мира.
-4. Не создавай объекты из ничего - они должны иметь логическое происхождение.
-5. Удаляй объекты только если они действительно уничтожены или исчезли.
-6. Перемещай объекты только если это физически возможно.
-
-`,
-    isCustom: false,
-    type: 'simulation'
-  },
-  {
-    id: 'creative',
-    name: 'Креативный',
-    description: 'Креативный режим - больше свободы для необычных действий',
-    prompt: `Ты - креативный ИИ Гейм-Мастер. Твоя задача - изменять состояние мира через инструменты, позволяя игрокам делать интересные и необычные вещи.
-
-ВАЖНО: НЕ генерируй текстовый ответ. ТОЛЬКО вызывай инструменты. Нарратив будет создан отдельно.
-
-Креативные правила:
-1. Позволяй игрокам делать необычные, но интересные действия.
-2. Если действие логически возможно с небольшой натяжкой - разреши его.
-3. Создавай объекты, которые могут понадобиться для интересного геймплея.
-4. Используй атрибуты для создания интересных состояний и эффектов.
-5. Не бойся экспериментировать с нестандартными комбинациями действий.
-6. Помни: цель - сделать игру интересной и увлекательной.
-
-`,
-    isCustom: false,
-    type: 'simulation'
-  }
-];
-
-// Стандартные пресеты для нарратива
-export const DEFAULT_NARRATIVE_PRESETS: PromptPreset[] = [
-  {
-    id: 'default',
-    name: 'Стандартный',
-    description: 'Базовый промпт для нарратива',
-    prompt: `Ты - талантливый писатель и рассказчик, создающий живые, атмосферные описания событий в игровом мире.
-
-ЯЗЫК: Пиши на русском языке.
-
-Твоя задача - создать художественное, детальное описание того, что произошло в результате действий игрока. 
-
-Правила для нарратива:
-1. Используй богатый, образный язык. Опиши не только что произошло, но и как это выглядело, звучало, ощущалось.
-2. Учитывай атмосферу и жанр мира. Если это нуар - используй соответствующий стиль, если фэнтези - создай магическую атмосферу.
-3. Фокусируйся на деталях: звуки, запахи, визуальные образы, тактильные ощущения.
-4. Передавай эмоции и настроение персонажей через их действия и реакции.
-5. Будь конкретным, но не перегружай текст избыточными деталями.
-6. Создавай ощущение присутствия - читатель должен почувствовать себя в этом мире.
-7. Используй динамичные глаголы и яркие образы вместо абстрактных описаний.
-8. Длина описания должна быть достаточной для погружения, но не чрезмерной (обычно 1-2 абзаца).
-
-Помни: ты не описываешь правила игры или механику - ты создаёшь живой, дышащий мир, который читатель может увидеть и почувствовать.`,
-    isCustom: false,
-    type: 'narrative'
-  },
-  {
-    id: 'detailed',
-    name: 'Детальный',
-    description: 'Максимально детальные описания с большим количеством деталей',
-    prompt: `Ты - мастер детальных описаний, создающий максимально живые и насыщенные тексты о событиях в игровом мире.
-
-ЯЗЫК: Пиши на русском языке.
-
-Твоя задача - создать максимально детальное, многослойное описание того, что произошло.
-
-Правила для детального нарратива:
-1. Используй максимально богатый и образный язык с множеством деталей.
-2. Опиши все аспекты: визуальные (цвета, формы, движения), звуковые (громкость, тембр, ритм), тактильные (текстуры, температуры), обонятельные (запахи, ароматы).
-3. Передавай внутренние переживания персонажей через их внешние проявления.
-4. Используй метафоры и сравнения для создания ярких образов.
-5. Опиши не только главное событие, но и фоновые детали, атмосферу, настроение.
-6. Длина описания может быть больше обычного (2-3 абзаца), если это необходимо для полного погружения.
-7. Создавай ощущение полного присутствия в мире.
-
-Помни: цель - создать максимально живое и детальное описание, которое полностью погружает читателя в мир.`,
-    isCustom: false,
-    type: 'narrative'
-  },
-  {
-    id: 'concise',
-    name: 'Краткий',
-    description: 'Краткие и ёмкие описания без лишних деталей',
-    prompt: `Ты - мастер кратких и ёмких описаний, создающий лаконичные, но живые тексты о событиях в игровом мире.
-
-ЯЗЫК: Пиши на русском языке.
-
-Твоя задача - создать краткое, но выразительное описание того, что произошло.
-
-Правила для краткого нарратива:
-1. Используй ёмкий, точный язык без лишних слов.
-2. Фокусируйся на главном - что произошло и как это выглядело.
-3. Используй яркие, но краткие образы.
-4. Передавай атмосферу через ключевые детали, а не через длинные описания.
-5. Длина описания должна быть небольшой (обычно 1 абзац), но достаточной для понимания.
-6. Каждое слово должно нести смысл - избегай повторов и избыточности.
-
-Помни: цель - создать краткое, но живое описание, которое передаёт суть события без лишних деталей.`,
-    isCustom: false,
-    type: 'narrative'
-  }
-];
-
-// Ключи для localStorage
-const STORAGE_KEY_SIMULATION = 'rpg_prompt_presets_simulation';
-const STORAGE_KEY_NARRATIVE = 'rpg_prompt_presets_narrative';
-
-// Загрузка пользовательских пресетов из localStorage
-export const loadCustomPresets = (type: 'simulation' | 'narrative'): PromptPreset[] => {
+// Загрузка всех пресетов с сервера
+export const getAllPresets = async (type: 'simulation' | 'narrative'): Promise<PromptPreset[]> => {
   try {
-    const key = type === 'simulation' ? STORAGE_KEY_SIMULATION : STORAGE_KEY_NARRATIVE;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const parsed = JSON.parse(stored) as PromptPreset[];
-      return parsed.filter(p => p.isCustom && p.type === type);
+    const response = await fetch(`/api/prompts?type=${type}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.prompts) {
+        console.log(`[Presets] Loaded ${data.prompts.length} ${type} presets:`, data.prompts.map((p: PromptPreset) => p.name));
+        return data.prompts;
+      }
     }
   } catch (e) {
-    console.warn('[Presets] Failed to load custom presets:', e);
+    console.warn('[Presets] Failed to load presets from server:', e);
+    // Fallback: попытка загрузить из localStorage (для обратной совместимости)
+    try {
+      const key = type === 'simulation' ? 'rpg_prompt_presets_simulation' : 'rpg_prompt_presets_narrative';
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored) as PromptPreset[];
+        return parsed.filter(p => p.type === type);
+      }
+    } catch (localError) {
+      console.warn('[Presets] Failed to load from localStorage:', localError);
+    }
   }
   return [];
 };
 
-// Сохранение пользовательских пресетов в localStorage
-export const saveCustomPresets = (type: 'simulation' | 'narrative', presets: PromptPreset[]): void => {
+// Синхронная версия для обратной совместимости (возвращает пустой массив, так как загрузка асинхронная)
+export const getAllPresetsSync = (type: 'simulation' | 'narrative'): PromptPreset[] => {
+  console.warn('[Presets] getAllPresetsSync is deprecated, use getAllPresets instead');
+  return [];
+};
+
+// Добавление пресета
+export const addPreset = async (type: 'simulation' | 'narrative', preset: Omit<PromptPreset, 'id' | 'type'>): Promise<PromptPreset> => {
+  const newPreset: PromptPreset = {
+    ...preset,
+    id: `preset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    type
+  };
+
   try {
-    const key = type === 'simulation' ? STORAGE_KEY_SIMULATION : STORAGE_KEY_NARRATIVE;
-    const customPresets = presets.filter(p => p.isCustom && p.type === type);
-    localStorage.setItem(key, JSON.stringify(customPresets));
+    const response = await fetch('/api/prompts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newPreset)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        return data.prompt || newPreset;
+      }
+    }
+    throw new Error('Failed to save preset');
   } catch (e) {
-    console.warn('[Presets] Failed to save custom presets:', e);
+    console.error('[Presets] Failed to save preset:', e);
+    throw e;
   }
 };
 
-// Получение всех пресетов (стандартные + пользовательские)
-export const getAllPresets = (type: 'simulation' | 'narrative'): PromptPreset[] => {
-  const defaultPresets = type === 'simulation' ? DEFAULT_SIMULATION_PRESETS : DEFAULT_NARRATIVE_PRESETS;
-  const customPresets = loadCustomPresets(type);
-  return [...defaultPresets, ...customPresets];
+// Обновление промпта
+export const updatePreset = async (type: 'simulation' | 'narrative', presetId: string, preset: Partial<Omit<PromptPreset, 'id' | 'type'>>): Promise<PromptPreset> => {
+  try {
+    const existingPreset = await getPresetById(type, presetId);
+    if (!existingPreset) {
+      throw new Error('Preset not found');
+    }
+
+    const updatedPreset: PromptPreset = {
+      ...existingPreset,
+      ...preset,
+      id: presetId,
+      type
+    };
+
+    const response = await fetch(`/api/prompts?type=${type}&id=${presetId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedPreset)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        return data.prompt || updatedPreset;
+      }
+    }
+    throw new Error('Failed to update preset');
+  } catch (e) {
+    console.error('[Presets] Failed to update preset:', e);
+    throw e;
+  }
 };
 
-// Добавление пользовательского пресета
-export const addCustomPreset = (type: 'simulation' | 'narrative', preset: Omit<PromptPreset, 'id' | 'isCustom' | 'type'>): PromptPreset => {
-  const customPresets = loadCustomPresets(type);
-  const newPreset: PromptPreset = {
-    ...preset,
-    id: `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    isCustom: true,
-    type
-  };
-  const updated = [...customPresets, newPreset];
-  saveCustomPresets(type, updated);
-  return newPreset;
-};
+// Удаление пресета
+export const deletePreset = async (type: 'simulation' | 'narrative', presetId: string): Promise<void> => {
+  try {
+    const response = await fetch(`/api/prompts?type=${type}&id=${presetId}`, {
+      method: 'DELETE'
+    });
 
-// Удаление пользовательского пресета
-export const deleteCustomPreset = (type: 'simulation' | 'narrative', presetId: string): void => {
-  const customPresets = loadCustomPresets(type);
-  const updated = customPresets.filter(p => p.id !== presetId);
-  saveCustomPresets(type, updated);
+    if (!response.ok) {
+      throw new Error('Failed to delete preset');
+    }
+  } catch (e) {
+    console.error('[Presets] Failed to delete preset:', e);
+    throw e;
+  }
 };
 
 // Получение пресета по ID
-export const getPresetById = (type: 'simulation' | 'narrative', presetId: string): PromptPreset | undefined => {
-  const allPresets = getAllPresets(type);
-  return allPresets.find(p => p.id === presetId);
+export const getPresetById = async (type: 'simulation' | 'narrative', presetId: string): Promise<PromptPreset | undefined> => {
+  try {
+    const response = await fetch(`/api/prompts?type=${type}&id=${presetId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.prompt) {
+        return data.prompt;
+      }
+    }
+  } catch (e) {
+    console.warn('[Presets] Failed to load preset from server:', e);
+  }
+
+  return undefined;
 };
 

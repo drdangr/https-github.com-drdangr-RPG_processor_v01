@@ -3,6 +3,7 @@ import { GameTool } from '../types';
 // --- Manual Fallback List ---
 // Используется, если среда не поддерживает автоматическое сканирование (require.context)
 import moveObject from './moveObject';
+import movePlayer from './movePlayer';
 import setAttribute from './setAttribute';
 import deleteAttribute from './deleteAttribute';
 import createObject from './createObject';
@@ -10,6 +11,7 @@ import deleteObject from './deleteObject';
 
 let tools: GameTool[] = [
   moveObject,
+  movePlayer,
   setAttribute,
   deleteAttribute,
   createObject,
