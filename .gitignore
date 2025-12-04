@@ -16,7 +16,7 @@ dist-ssr
 coverage/
 
 # Project data (generated/modified by application)
-data/
+# data/
 
 # Environment variables
 .env

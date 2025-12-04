@@ -20,7 +20,8 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "connectionId": "char_001",
     "attributes": {
       "condition": "разбитый экран, но работает",
-      "type": "стандартный полицейский планшет"
+      "type": "стандартный полицейский планшет",
+      "purpose": "выявляет скрытые следы и предметы"
     }
   },
   {

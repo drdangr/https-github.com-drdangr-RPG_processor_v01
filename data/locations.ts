@@ -31,7 +31,8 @@ export const INITIAL_LOCATIONS: LocationData[] = [
     ],
     "attributes": {
       "state": "скользко от кислотного дождя",
-      "safety": "опасно, стоит быть настороже"
+      "safety": "опасно, стоит быть настороже",
+      "time of day": "ранний вечер"
     }
   },
   {
