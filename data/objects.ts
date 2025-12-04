@@ -48,7 +48,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764644085541_jv8h",
     "name": "Пакетик с травкой",
-    "connectionId": "obj_1764718477192_s71y",
+    "connectionId": "obj_1764621899013",
     "attributes": {
       "condition": "запечатан",
       "size": "небольшой",
@@ -185,6 +185,16 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "attributes": {
       "positioning": "в центре кабинета",
       "description": "массивный дубовый стол"
+    }
+  },
+  {
+    "id": "obj_1764817851476",
+    "name": "Камушек",
+    "connectionId": "obj_1764718477192_s71y",
+    "attributes": {
+      "size": "маленький, меньше сантиметра",
+      "feature": "острый, может быть досадной помехой",
+      "material": "гранит"
     }
   }
 ];

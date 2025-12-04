@@ -450,9 +450,17 @@ export const ObjectsEditor: React.FC<{
     return objectsByParent.get(parentId) || [];
   };
   
-  // Функция для сортировки объектов по алфавиту
+  // Функция для сортировки объектов: объекты с именем "New Obj" вверху, затем по алфавиту
   const sortObjects = (objects: ObjectData[]) => {
     return [...objects].sort((a, b) => {
+      const aIsNew = (a.name || '').trim() === 'New Obj';
+      const bIsNew = (b.name || '').trim() === 'New Obj';
+      
+      // Если один новый, а другой нет - новый идет первым
+      if (aIsNew && !bIsNew) return -1;
+      if (!aIsNew && bIsNew) return 1;
+      
+      // Если оба новые или оба заполненные - сортируем по алфавиту
       const nameA = (a.name || '').toLowerCase();
       const nameB = (b.name || '').toLowerCase();
       return nameA.localeCompare(nameB, 'ru');
@@ -479,6 +487,11 @@ export const ObjectsEditor: React.FC<{
       }
       groupedByRoot.get(obj.connectionId)!.push(obj);
     }
+  });
+  
+  // Сортируем объекты внутри каждой группы (новые объекты вверху)
+  groupedByRoot.forEach((objects, connectionId) => {
+    groupedByRoot.set(connectionId, sortObjects(objects));
   });
   
   // Сортируем группы по названию локации/игрока
@@ -552,6 +565,16 @@ export const ObjectsEditor: React.FC<{
       
       {/* Контент с отступом */}
       <div className="p-4 pt-2">
+        {/* Объекты без связи - в начале */}
+        {sortedUngroupedObjects.length > 0 && (
+          <div className="mb-4">
+            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">
+              📦 Без связи
+            </div>
+            {sortedUngroupedObjects.map(obj => renderObjectWithChildren(obj, 0))}
+          </div>
+        )}
+        
         {/* Группы по Connected To */}
         {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => (
           <div key={connectionId} className="mb-4">
@@ -561,16 +584,6 @@ export const ObjectsEditor: React.FC<{
             {objects.map(obj => renderObjectWithChildren(obj, 0))}
           </div>
         ))}
-        
-        {/* Объекты без связи */}
-        {sortedUngroupedObjects.length > 0 && (
-          <div className="mb-4">
-            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">
-              📦 Без связи
-            </div>
-            {sortedUngroupedObjects.map(obj => renderObjectWithChildren(obj, 0))}
-          </div>
-        )}
       </div>
     </div>
   );
