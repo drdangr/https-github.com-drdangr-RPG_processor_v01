@@ -160,27 +160,33 @@ export const processGameTurn = async (
     const createSystemInstruction = (state: GameState, isFinalNarrative: boolean = false) => {
       const normalizedState = normalizeState(state);
       
-      // Для нарратива используем narrativePromptOverride, если задан, иначе DEFAULT_NARRATIVE_PROMPT
-      // Для симуляции используем systemPromptOverride или DEFAULT_SYSTEM_PROMPT
+      // Для нарратива и симуляции используем ТОЛЬКО то, что указано в пресете или поле
+      // Нет fallback на DEFAULT_*_PROMPT - промпты должны быть явно заданы
       let basePrompt: string;
       let promptSource: string;
       
       if (isFinalNarrative) {
-        if (settings.narrativePromptOverride) {
+        // Для нарратива используем ТОЛЬКО то, что указано в пресете или поле
+        // Нет fallback на DEFAULT_NARRATIVE_PROMPT - промпт должен быть явно задан
+        if (settings.narrativePromptOverride !== undefined && settings.narrativePromptOverride !== null) {
           basePrompt = settings.narrativePromptOverride;
-          promptSource = 'narrativePromptOverride (custom)';
+          promptSource = basePrompt === '' ? 'narrativePromptOverride (empty)' : 'narrativePromptOverride (custom)';
         } else {
-          basePrompt = DEFAULT_NARRATIVE_PROMPT;
-          promptSource = 'DEFAULT_NARRATIVE_PROMPT';
+          // Если промпт не задан - используем пустую строку (промпт должен быть задан через пресет)
+          basePrompt = '';
+          promptSource = 'narrativePromptOverride (not set, using empty)';
         }
         console.log(`[Service] 🎭 Using narrative prompt: ${promptSource}`);
       } else {
-        if (settings.systemPromptOverride) {
+        // Для симуляции используем ТОЛЬКО то, что указано в пресете или поле
+        // Нет fallback на DEFAULT_SYSTEM_PROMPT - промпт должен быть явно задан
+        if (settings.systemPromptOverride !== undefined && settings.systemPromptOverride !== null) {
           basePrompt = settings.systemPromptOverride;
-          promptSource = 'systemPromptOverride (custom)';
+          promptSource = basePrompt === '' ? 'systemPromptOverride (empty)' : 'systemPromptOverride (custom)';
         } else {
-          basePrompt = DEFAULT_SYSTEM_PROMPT;
-          promptSource = 'DEFAULT_SYSTEM_PROMPT';
+          // Если промпт не задан - используем пустую строку (промпт должен быть задан через пресет)
+          basePrompt = '';
+          promptSource = 'systemPromptOverride (not set, using empty)';
         }
         console.log(`[Service] ⚙️ Using simulation prompt: ${promptSource}`);
       }
