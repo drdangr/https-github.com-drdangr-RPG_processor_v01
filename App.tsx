@@ -38,6 +38,40 @@ const App: React.FC = () => {
   const [newPresetPrompt, setNewPresetPrompt] = useState('');
   const savePresetTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
   
+  // Refs for auto-resizing textareas
+  const systemPromptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const narrativePromptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Function to auto-resize textarea (max 20 lines)
+  const autoResizeTextarea = (textarea: HTMLTextAreaElement | null) => {
+    if (!textarea) return;
+    
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Calculate the height based on scrollHeight
+    const lineHeight = parseInt(getComputedStyle(textarea).lineHeight) || 16;
+    const maxHeight = lineHeight * 20; // 20 lines max
+    const minHeight = lineHeight * 1; // 1 line min
+    
+    if (textarea.scrollHeight <= maxHeight) {
+      textarea.style.height = `${Math.max(textarea.scrollHeight, minHeight)}px`;
+      textarea.style.overflowY = 'hidden';
+    } else {
+      textarea.style.height = `${maxHeight}px`;
+      textarea.style.overflowY = 'auto';
+    }
+  };
+  
+  // Initialize textarea heights when values change
+  useEffect(() => {
+    autoResizeTextarea(systemPromptTextareaRef.current);
+  }, [aiSettings.systemPromptOverride, simulationPresets]);
+  
+  useEffect(() => {
+    autoResizeTextarea(narrativePromptTextareaRef.current);
+  }, [aiSettings.narrativePromptOverride, narrativePresets]);
+  
   // Load presets on mount
   useEffect(() => {
     const loadPresets = async () => {
@@ -868,6 +902,7 @@ const App: React.FC = () => {
                     </div>
                     
                     <textarea
+                      ref={systemPromptTextareaRef}
                       value={aiSettings.systemPromptOverride ?? (simulationPresets.find(p => p.id === 'default')?.prompt || '')}
                       onChange={async (e) => {
                         const value = e.target.value;
@@ -884,9 +919,12 @@ const App: React.FC = () => {
                           // Сбрасываем пресет, если пользователь вручную редактирует промпт (и он отличается от пресета)
                           systemPromptPresetId: isDefault || !isPresetValue ? undefined : prev.systemPromptPresetId
                         }));
+                        autoResizeTextarea(e.currentTarget);
                       }}
-                      className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none"
+                      onInput={(e) => autoResizeTextarea(e.currentTarget)}
+                      className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-cyan-500 resize-none overflow-y-auto"
                       placeholder="Системный промпт для AI..."
+                      style={{ minHeight: '1.5rem' }}
                     />
                     <p className="text-[9px] text-gray-600 mt-1">
                       {aiSettings.systemPromptPresetId 
@@ -1215,6 +1253,7 @@ const App: React.FC = () => {
                       </div>
                       
                       <textarea
+                        ref={narrativePromptTextareaRef}
                         value={aiSettings.narrativePromptOverride ?? (narrativePresets.find(p => p.id === 'default')?.prompt || '')}
                         onChange={async (e) => {
                           const value = e.target.value;
@@ -1231,9 +1270,12 @@ const App: React.FC = () => {
                             // Сбрасываем пресет, если пользователь вручную редактирует промпт (и он отличается от пресета)
                             narrativePromptPresetId: isDefault || !isPresetValue ? undefined : prev.narrativePromptPresetId
                           }));
+                          autoResizeTextarea(e.currentTarget);
                         }}
-                        className="w-full h-32 bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-purple-500 resize-none"
+                        onInput={(e) => autoResizeTextarea(e.currentTarget)}
+                        className="w-full bg-black/40 border border-gray-700 rounded px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-purple-500 resize-none overflow-y-auto"
                         placeholder="Системный промпт для нарратива..."
+                        style={{ minHeight: '1.5rem' }}
                       />
                       <p className="text-[9px] text-gray-600 mt-1">
                         {aiSettings.narrativePromptPresetId 
