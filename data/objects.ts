@@ -73,7 +73,10 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "connectionId": "loc_001",
     "attributes": {
       "technology": "суперсовременный",
-      "capability": "способен творить чудеса с тяжело ранеными"
+      "capability": "способен творить чудеса с тяжело ранеными",
+      "position": "в углу кабинета",
+      "appearance": "мигает лампочками и блестит хромом",
+      "condition": "новенький"
     }
   },
   {
@@ -103,30 +106,6 @@ export const INITIAL_OBJECTS: ObjectData[] = [
       "condition": "свежее",
       "appearance": "наливное красное",
       "smell": "пахнет свежестью"
-    }
-  },
-  {
-    "id": "obj_1764718239437_m975",
-    "name": "Ковбойская шляпа",
-    "connectionId": "char_001",
-    "attributes": {
-      "condition": "потертая, но крепкая"
-    }
-  },
-  {
-    "id": "obj_1764718239437_nufq",
-    "name": "Кожаный жилет",
-    "connectionId": "char_001",
-    "attributes": {
-      "condition": "потертый, но крепкий"
-    }
-  },
-  {
-    "id": "obj_1764718239437_xovb",
-    "name": "Джинсы",
-    "connectionId": "char_001",
-    "attributes": {
-      "condition": "потертые, но крепкие"
     }
   },
   {
@@ -196,6 +175,40 @@ export const INITIAL_OBJECTS: ObjectData[] = [
       "size": "маленький, меньше сантиметра",
       "feature": "острый, может быть досадной помехой",
       "material": "гранит"
+    }
+  },
+  {
+    "id": "obj_1764821357679_1m73",
+    "name": "Ковбойская шляпа",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертая, но крепкая"
+    }
+  },
+  {
+    "id": "obj_1764821357679_knb2",
+    "name": "Кожаный жилет",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертый, но крепкий"
+    }
+  },
+  {
+    "id": "obj_1764821357680_9p0y",
+    "name": "Джинсы",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "потертые, но крепкие"
+    }
+  },
+  {
+    "id": "obj_1764821654183",
+    "name": "Диван",
+    "connectionId": "loc_001",
+    "attributes": {
+      "condition": "старый, но крепкий",
+      "material": "кожаный",
+      "color": "черный"
     }
   }
 ];
