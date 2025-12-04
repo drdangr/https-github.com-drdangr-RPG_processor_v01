@@ -126,12 +126,12 @@ export interface AISettings {
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
-  modelId: 'gemini-2.5-pro', // Pro модель для симуляции (более точная логика)
+  modelId: 'gemini-flash-latest', // Flash Latest для симуляции
   maxIterations: 1,
-  temperature: 0.0, // Низкая температура для точной симуляции
+  temperature: 0.6, // Температура для симуляции
   thinkingBudget: 2048,
-  narrativeModelId: 'gemini-2.5-flash', // Flash модель для нарратива (быстрее и дешевле)
-  narrativeTemperature: 1.0, // Высокая температура для креативного нарратива
+  narrativeModelId: 'gemini-flash-lite-latest', // Flash Lite Latest для нарратива
+  narrativeTemperature: 0.8, // Температура для нарратива
 };
 
 export const AVAILABLE_MODELS = [
@@ -152,6 +152,14 @@ export const AVAILABLE_MODELS = [
   // Gemini 2.5 Flash-Lite - most cost effective
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite — $0.10/$0.40 (самая дешёвая)' },
 ];
+
+// История ходов игры
+export interface TurnHistory {
+  turn: number;
+  userPrompt: string;        // Запрос игрока
+  narrative: string;         // Нарративное описание с разметкой [type:ID:name]
+  toolLogs: ToolCallLog[];   // Лог выполненных инструментов
+}
 
 // Modular Tool Definition
 export interface GameTool {

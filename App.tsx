@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GameState, SimulationResult, WorldData, LocationData, PlayerData, ObjectData, AISettings, DEFAULT_AI_SETTINGS, AVAILABLE_MODELS } from './types';
+import { GameState, SimulationResult, WorldData, LocationData, PlayerData, ObjectData, AISettings, DEFAULT_AI_SETTINGS, AVAILABLE_MODELS, TurnHistory } from './types';
 import { INITIAL_STATE } from './constants';
 import { ALL_TOOLS } from './tools/index';
 import { processGameTurn } from './services/geminiService';
@@ -13,7 +13,8 @@ import { getAllPresets, addPreset, deletePreset, getPresetById, updatePreset, Pr
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
   const [playerInput, setPlayerInput] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'world' | 'locations' | 'players' | 'objects'>('world');
+  const [activeTab, setActiveTab] = useState<'world' | 'locations' | 'players' | 'objects' | 'history'>('world');
+  const [history, setHistory] = useState<TurnHistory[]>([]); // История ходов игры
   
   // State for enabled tools. Default all to true, except move_player which is disabled by default.
   const [toolEnabledState, setToolEnabledState] = useState<Record<string, boolean>>(() => {
@@ -434,7 +435,11 @@ const App: React.FC = () => {
     const enabledTools = ALL_TOOLS.filter(t => toolEnabledState[t.definition.name]);
 
     try {
-      const result = await processGameTurn(gameState, playerInput, enabledTools, aiSettings);
+      console.log("[App] Sending history to processGameTurn:", {
+        historyLength: history.length,
+        history: history.map(h => ({ turn: h.turn, userPrompt: h.userPrompt.substring(0, 50) + '...' }))
+      });
+      const result = await processGameTurn(gameState, playerInput, enabledTools, aiSettings, history);
       console.log("[App] Result received:", result);
       setLastResult(result);
     } catch (err: any) {
@@ -447,6 +452,24 @@ const App: React.FC = () => {
 
   const handleCommitChanges = () => {
     if (lastResult) {
+      // Сохраняем ход в историю перед обновлением состояния
+      const turnNumber = history.length + 1;
+      const turnEntry: TurnHistory = {
+        turn: turnNumber,
+        userPrompt: playerInput,
+        narrative: lastResult.narrative,
+        toolLogs: lastResult.toolLogs
+      };
+      
+      setHistory(prev => {
+        const newHistory = [...prev, turnEntry];
+        console.log("[App] History updated:", {
+          oldLength: prev.length,
+          newLength: newHistory.length,
+          lastTurn: turnEntry.turn
+        });
+        return newHistory;
+      });
       setGameState(lastResult.newState);
       setHasUnsavedChanges(true);
       scheduleAutoSave(lastResult.newState);
@@ -488,7 +511,7 @@ const App: React.FC = () => {
         {/* Left Column: Data Editor */}
         <section style={{ width: `${leftColumnWidth}%` }} className="shrink-0 flex flex-col bg-gray-900/50 min-h-0">
           <div className="flex border-b border-gray-800">
-            {['world', 'locations', 'players', 'objects'].map((tab) => (
+            {['world', 'locations', 'players', 'objects', 'history'].map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -499,7 +522,7 @@ const App: React.FC = () => {
                     : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
                 }`}
               >
-                {tab}
+                {tab === 'history' ? `history (${history.length})` : tab}
               </button>
             ))}
           </div>
@@ -517,7 +540,7 @@ const App: React.FC = () => {
             {activeTab === 'objects' && (
               <ObjectsEditor 
                 data={gameState.objects} 
-                onChange={updateObjects} 
+                onChange={updateObjects}
                 onSave={handleSaveToFiles}
                 connectionTargets={[
                   ...gameState.players.map(p => ({ id: p.id, name: p.name, type: 'player' as const })),
@@ -525,6 +548,76 @@ const App: React.FC = () => {
                   ...gameState.objects.map(o => ({ id: o.id, name: o.name, type: 'object' as const }))
                 ]}
               />
+            )}
+            {activeTab === 'history' && (
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-white">История ходов</h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-400">Всего ходов: {history.length}</span>
+                    {history.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Очистить всю историю?')) {
+                            setHistory([]);
+                          }
+                        }}
+                        className="px-3 py-1 text-xs bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
+                      >
+                        Очистить
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {history.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <p className="text-lg mb-2">История пуста</p>
+                    <p className="text-sm">История будет заполняться после каждого коммита изменений</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {history.map((turn, idx) => (
+                      <div key={idx} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-lg font-bold text-purple-400">Ход {turn.turn}</h3>
+                          <span className="text-xs text-gray-500">
+                            {turn.toolLogs.length} инструмент{turn.toolLogs.length !== 1 ? 'ов' : ''}
+                          </span>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <div className="text-xs font-bold text-gray-400 uppercase mb-1">Запрос игрока:</div>
+                          <div className="text-sm text-gray-200 bg-gray-900/50 p-2 rounded">
+                            "{turn.userPrompt}"
+                          </div>
+                        </div>
+
+                        {turn.toolLogs.length > 0 && (
+                          <div className="mb-3">
+                            <div className="text-xs font-bold text-gray-400 uppercase mb-1">Выполненные действия:</div>
+                            <div className="space-y-1">
+                              {turn.toolLogs.map((log, logIdx) => (
+                                <div key={logIdx} className="text-xs text-cyan-300 bg-gray-900/50 p-2 rounded font-mono">
+                                  <span className="text-cyan-500">{log.name}</span>
+                                  {' → '}
+                                  <span className="text-gray-300">{log.result}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div>
+                          <div className="text-xs font-bold text-gray-400 uppercase mb-1">Нарратив:</div>
+                          <div className="text-sm text-gray-200 bg-gray-900/50 p-3 rounded">
+                            <NarrativeText text={turn.narrative} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </section>

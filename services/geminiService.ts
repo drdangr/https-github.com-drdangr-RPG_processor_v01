@@ -1,5 +1,5 @@
 import { GoogleGenAI, Tool, Content, Part } from "@google/genai";
-import { GameState, SimulationResult, ToolCallLog, GameTool, AISettings, DEFAULT_AI_SETTINGS, TokenUsage, CostInfo } from "../types";
+import { GameState, SimulationResult, ToolCallLog, GameTool, AISettings, DEFAULT_AI_SETTINGS, TokenUsage, CostInfo, TurnHistory } from "../types";
 import { normalizeState } from "../utils/gameUtils";
 
 // Цены на токены для разных моделей Gemini (за 1 миллион токенов)
@@ -113,6 +113,8 @@ export const DEFAULT_NARRATIVE_PROMPT = `Ты - талантливый писа�
 8. Длина описания должна быть достаточной для погружения, но не чрезмерной (обычно 1-2 абзаца).
 9. ВСЕГДА размечай объекты, игроков и локации указанным выше форматом.
 
+ПРИМЕЧАНИЕ: Список всех доступных объектов, игроков и локаций с их ID будет предоставлен в контексте ниже. Используй эти ID для разметки.
+
 Помни: ты не описываешь правила игры или механику - ты создаёшь живой, дышащий мир, который читатель может увидеть и почувствовать.
 
 КРИТИЧЕСКИ ВАЖНО: Выводи ТОЛЬКО художественный текст. НЕ включай в ответ свои рассуждения, анализ или мысли. Начинай сразу с нарратива.`;
@@ -121,9 +123,14 @@ export const processGameTurn = async (
   currentState: GameState,
   userPrompt: string,
   enabledTools: GameTool[],
-  settings: AISettings = DEFAULT_AI_SETTINGS
+  settings: AISettings = DEFAULT_AI_SETTINGS,
+  history: TurnHistory[] = []
 ): Promise<SimulationResult> => {
   console.log("[Service] Starting processGameTurn...");
+  console.log("[Service] History received:", {
+    historyLength: history.length,
+    history: history.map(h => ({ turn: h.turn, userPrompt: h.userPrompt.substring(0, 50) + '...' }))
+  });
 
   try {
     // Safer API Key Check
@@ -178,11 +185,32 @@ export const processGameTurn = async (
         console.log(`[Service] ⚙️ Using simulation prompt: ${promptSource}`);
       }
       
+      // Формируем историю для промпта (это контекст, не часть системного промпта)
+      let historySection = '';
+      if (history.length > 0) {
+        const recentHistory = history.slice(-3); // Последние 3 хода
+        console.log(`[Service] Adding history to prompt: ${recentHistory.length} turns (out of ${history.length} total)`);
+        if (isFinalNarrative) {
+          // Для нарратора - передаём последние нарративы для стилистической связности
+          historySection = `\n\nИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (для стилистической связности):\n${recentHistory.map((turn, idx) => 
+            `Ход ${turn.turn}:\nИгрок: "${turn.userPrompt}"\nНарратив: "${turn.narrative}"`
+          ).join('\n\n---\n\n')}\n`;
+        } else {
+          // Для симуляции - передаём нарративы с разметкой для материализации объектов
+          historySection = `\n\nИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (для понимания контекста и материализации объектов):\n${recentHistory.map((turn, idx) => 
+            `Ход ${turn.turn}:\nИгрок: "${turn.userPrompt}"\nНарратив: "${turn.narrative}"`
+          ).join('\n\n---\n\n')}\n`;
+        }
+      } else {
+        console.log("[Service] No history available for this turn");
+      }
+      
+      // basePrompt - это ровно то, что указано в системном промпте (поле или пресет)
+      // JSON состояния и история - это контекст, который добавляется отдельно
       const baseInstruction = `${basePrompt}
 
 ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
-${JSON.stringify(normalizedState, null, 2)}
-`;
+${JSON.stringify(normalizedState, null, 2)}${historySection}`;
       
       return baseInstruction;
     };
