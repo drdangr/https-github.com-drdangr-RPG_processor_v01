@@ -5,6 +5,7 @@ import { ALL_TOOLS } from './tools/index';
 import { processGameTurn } from './services/geminiService';
 import { WorldEditor, LocationsEditor, PlayersEditor, ObjectsEditor, ConnectionTarget, LocationOption } from './components/FormEditors';
 import DiffView from './components/DiffView';
+import NarrativeText from './components/NarrativeText';
 import { saveDataFiles } from './utils/dataExporter';
 import { normalizeState } from './utils/gameUtils';
 import { getAllPresets, addPreset, deletePreset, getPresetById, updatePreset, PromptPreset } from './utils/promptPresets';
@@ -14,10 +15,13 @@ const App: React.FC = () => {
   const [playerInput, setPlayerInput] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'world' | 'locations' | 'players' | 'objects'>('world');
   
-  // State for enabled tools. Default all to true.
+  // State for enabled tools. Default all to true, except move_player which is disabled by default.
   const [toolEnabledState, setToolEnabledState] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    ALL_TOOLS.forEach(t => initial[t.definition.name] = true);
+    ALL_TOOLS.forEach(t => {
+      // Отключаем move_player по умолчанию
+      initial[t.definition.name] = t.definition.name !== 'move_player';
+    });
     return initial;
   });
 
@@ -1375,9 +1379,15 @@ const App: React.FC = () => {
                         <div className="bg-black/30 rounded-lg p-4 border border-gray-700 shadow-lg mb-6 relative">
                              <div className="absolute top-0 left-0 w-1 h-full bg-purple-500 rounded-l"></div>
                              <h4 className="text-[10px] font-bold text-purple-400 uppercase mb-2 tracking-wider">Повествование</h4>
-                             <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-serif">
-                                {lastResult.narrative}
-                             </p>
+                             <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-serif">
+                                <NarrativeText 
+                                  text={lastResult.narrative}
+                                  onEntityClick={(type, id, name) => {
+                                    console.log(`Clicked ${type}: ${name} (${id})`);
+                                    // Можно добавить навигацию к объекту или показать детали
+                                  }}
+                                />
+                             </div>
                              
                              {/* Информация о токенах и стоимости */}
                              {lastResult.costInfo && lastResult.tokenUsage && (
