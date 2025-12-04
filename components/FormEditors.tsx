@@ -65,6 +65,20 @@ const SelectField = ({ label, value, onChange, options, placeholder = "Выбе�
     return acc;
   }, {} as Record<string, SelectOption[]>);
 
+  // Сортируем опции внутри каждой группы по алфавиту
+  Object.keys(grouped).forEach(groupName => {
+    grouped[groupName].sort((a, b) => {
+      const labelA = (a.label || '').toLowerCase();
+      const labelB = (b.label || '').toLowerCase();
+      return labelA.localeCompare(labelB, 'ru');
+    });
+  });
+
+  // Сортируем группы по алфавиту
+  const sortedGroups = Object.entries(grouped).sort(([nameA], [nameB]) => {
+    return nameA.localeCompare(nameB, 'ru');
+  });
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLSelectElement>) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -83,7 +97,7 @@ const SelectField = ({ label, value, onChange, options, placeholder = "Выбе�
         onKeyDown={handleKeyDown}
       >
         <option value="" className="text-gray-500">{placeholder}</option>
-        {Object.entries(grouped).map(([groupName, groupOptions]) => (
+        {sortedGroups.map(([groupName, groupOptions]) => (
           <optgroup key={groupName} label={groupName} className="bg-gray-900">
             {groupOptions.map(opt => (
               <option key={opt.id} value={opt.id} className="bg-gray-950">
@@ -401,31 +415,47 @@ export const ObjectsEditor: React.FC<{
 }> = ({ data, onChange, onSave, connectionTargets = [] }) => {
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
   
-  // Преобразуем targets в опции для SelectField
-  const connectionOptions: SelectOption[] = connectionTargets.map(t => ({
-    id: t.id,
-    label: `${t.name} (${t.id})`,
-    group: t.type === 'player' ? '👤 Игроки' : t.type === 'location' ? '📍 Локации' : '📦 Объекты'
-  }));
+  // Сортируем объекты по алфавиту по имени
+  const sortedData = [...data].sort((a, b) => {
+    const nameA = (a.name || '').toLowerCase();
+    const nameB = (b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB, 'ru');
+  });
+  
+  // Преобразуем targets в опции для SelectField и сортируем по алфавиту
+  const connectionOptions: SelectOption[] = connectionTargets
+    .map(t => ({
+      id: t.id,
+      label: `${t.name} (${t.id})`,
+      group: t.type === 'player' ? '👤 Игроки' : t.type === 'location' ? '📍 Локации' : '📦 Объекты'
+    }))
+    .sort((a, b) => {
+      const labelA = (a.label || '').toLowerCase();
+      const labelB = (b.label || '').toLowerCase();
+      return labelA.localeCompare(labelB, 'ru');
+    });
 
   return (
     <div className="p-4">
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
-      {data.map((item, i) => (
-        <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
-           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
-           <SelectField 
-             label="Connected To" 
-             value={item.connectionId} 
-             onChange={(v: string) => { const n = [...data]; n[i].connectionId = v; onChange(n); }} 
-             options={connectionOptions.filter(opt => opt.id !== item.id)} 
-             placeholder="Выберите владельца/контейнер..."
-             onSave={onSave} 
-           />
-        </ListItem>
-      ))}
+      {sortedData.map((item, i) => {
+        const originalIndex = data.findIndex(obj => obj.id === item.id);
+        return (
+          <ListItem key={item.id} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== originalIndex))}>
+             <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
+             <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
+             <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
+             <SelectField 
+               label="Connected To" 
+               value={item.connectionId} 
+               onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }} 
+               options={connectionOptions.filter(opt => opt.id !== item.id)} 
+               placeholder="Выберите владельца/контейнер..."
+               onSave={onSave} 
+             />
+          </ListItem>
+        );
+      })}
     </div>
   );
 };

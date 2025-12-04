@@ -153,10 +153,29 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764807474394",
     "name": "Книга \"Жизнь детективов\"",
-    "connectionId": "loc_1764698263182",
+    "connectionId": "char_001",
     "attributes": {
       "bookmark": "закладка на главе \"Детективы, как они есть, пьють и спять\"",
-      "description": "занятное чтиво, чтобы скоротать вечер"
+      "description": "занятное чтиво, чтобы скоротать вечер",
+      "status": "читается вслух Джеком"
+    }
+  },
+  {
+    "id": "obj_1764816249204",
+    "name": "Кресло",
+    "connectionId": "loc_001",
+    "attributes": {
+      "condition": "старое, но еще крепкое",
+      "description": "кожаное кресло, в котором любит лидеть Джек"
+    }
+  },
+  {
+    "id": "obj_1764816467751_ox4z",
+    "name": "Сигара",
+    "connectionId": "char_001",
+    "attributes": {
+      "condition": "новая",
+      "type": "табачное изделие"
     }
   }
 ];
