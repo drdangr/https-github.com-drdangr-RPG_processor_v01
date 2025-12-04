@@ -27,7 +27,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_003",
     "name": "Бутылка виски",
-    "connectionId": "loc_001",
+    "connectionId": "obj_1764817473286",
     "attributes": {
       "condition": "почти пустая",
       "quality": "дешевый синтетический",
@@ -118,10 +118,10 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   },
   {
     "id": "obj_1764718477192_s71y",
-    "name": "Сапог (на столе)",
+    "name": "Сапог Джека",
     "connectionId": "obj_1764817473286",
     "attributes": {
-      "condition": "потертый, но крепкий, надетый Джеком"
+      "condition": "потертый, но крепкий"
     }
   },
   {
