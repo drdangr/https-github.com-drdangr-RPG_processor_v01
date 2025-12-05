@@ -72,20 +72,60 @@ const tool: GameTool = {
         try {
           parsedAttributes = JSON.parse(attributesArg);
         } catch (e) {
-          // Если не удалось распарсить как JSON, считаем это значением condition
-          normalizedAttributes.condition = attributesArg.trim();
+          // Попытка исправить распространенные ошибки
+          let fixedJson = attributesArg.trim();
+          
+          // Если нет открывающей скобки, но есть закрывающая - добавляем открывающую
+          if (!fixedJson.startsWith('{') && fixedJson.includes('}')) {
+            fixedJson = '{' + fixedJson;
+          }
+          
+          // Убираем лишние обратные слеши перед кавычками
+          fixedJson = fixedJson.replace(/\\"/g, '"');
+          
+          // Убираем лишние пробелы перед закрывающей скобкой
+          fixedJson = fixedJson.replace(/\s+\}/g, '}');
+          
+          try {
+            parsedAttributes = JSON.parse(fixedJson);
+            console.warn(`[createObject] Исправлен некорректный JSON: ${attributesArg.substring(0, 100)}... -> ${fixedJson.substring(0, 100)}...`);
+          } catch (e2) {
+            // Если все равно не получилось - пытаемся извлечь пары ключ-значение
+            console.warn(`[createObject] Не удалось распарсить JSON: ${attributesArg.substring(0, 100)}...`, e2);
+            
+            // Пытаемся найти пары "ключ": "значение" в тексте
+            const keyValuePattern = /"([^"]+)":\s*"([^"]+)"/g;
+            const matches = [...fixedJson.matchAll(keyValuePattern)];
+            
+            if (matches.length > 0) {
+              parsedAttributes = {};
+              matches.forEach(match => {
+                parsedAttributes[match[1]] = match[2];
+              });
+              console.warn(`[createObject] Извлечено ${matches.length} атрибутов из некорректного JSON`);
+            } else {
+              // Последний fallback - записываем как condition
+              normalizedAttributes.condition = attributesArg.trim();
+            }
+          }
         }
       } else if (typeof attributesArg === 'object') {
         parsedAttributes = attributesArg;
       }
     }
     
-    // Нормализуем распарсенные атрибуты
-    if (parsedAttributes && typeof parsedAttributes === 'object') {
+    // Нормализуем распарсенные атрибуты с валидацией
+    if (parsedAttributes && typeof parsedAttributes === 'object' && !Array.isArray(parsedAttributes)) {
       for (const [key, value] of Object.entries(parsedAttributes)) {
         if (value !== undefined && value !== null && value !== '') {
           normalizedAttributes[key] = String(value).trim();
         }
+      }
+    } else if (parsedAttributes) {
+      console.warn(`[createObject] parsedAttributes не является объектом:`, parsedAttributes);
+      // Fallback на condition
+      if (typeof attributesArg === 'string') {
+        normalizedAttributes.condition = attributesArg.trim();
       }
     }
     
