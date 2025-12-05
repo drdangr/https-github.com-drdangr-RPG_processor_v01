@@ -5,11 +5,14 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "move_object",
-    description: "Переместить объект: передать игроку, поместить в локацию или внутрь другого объекта.",
+    description: "Переместить объект: передать игроку, поместить в локацию или внутрь другого объекта. Может работать как с реальными ID объектов из состояния мира, так и с ID, созданными предыдущими вызовами create_object в этом же ответе модели через ссылки вида $N.createdId (где N — индекс вызова create_object в общем списке вызовов этого ответа, начиная с 0).",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        objectId: { type: Type.STRING, description: "Реальный ID объекта из состояния мира (формат: obj_timestamp_suffix). Не выдумывай ID - используй только существующие." },
+        objectId: { 
+          type: Type.STRING, 
+          description: "Реальный ID объекта из состояния мира (формат: obj_timestamp_suffix) ИЛИ ссылка на результат предыдущего вызова create_object в этом же ответе в формате $N.createdId (где N — индекс вызова create_object в общем списке вызовов этого ответа, начиная с 0). Например: если create_object был вторым вызовом (после move_player), используй $1.createdId. Не выдумывай ID вручную — либо используй реальные ID из GameState, либо ссылки $N.createdId." 
+        },
         targetId: { type: Type.STRING, description: "ID нового владельца/контейнера (Player ID, Location ID или Object ID)." },
       },
       required: ["objectId", "targetId"],

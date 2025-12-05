@@ -406,6 +406,44 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
       simulationTokenUsages.push(firstTokenUsage);
     }
 
+    // Вспомогательная функция: подстановка ссылок вида $N.createdId в аргументы вызова инструмента
+    const resolveReferences = (
+      args: any,
+      results: Array<{ result: string; createdId?: string }>
+    ): any => {
+      if (!args) return args;
+
+      const resolveValue = (value: any): any => {
+        if (typeof value === 'string') {
+          // Заменяем шаблоны вида $0.createdId, $1.createdId и т.п. на реальные ID,
+          // которые вернули предыдущие вызовы инструментов в рамках этого ответа.
+          return value.replace(/\$(\d+)\.createdId/g, (match, indexStr) => {
+            const index = parseInt(indexStr, 10);
+            const createdId = results[index]?.createdId;
+            // Если по какой-то причине ссылка не может быть разрешена — оставляем как есть,
+            // чтобы система валидации/логов отразила проблему явно.
+            return createdId || match;
+          });
+        }
+
+        if (Array.isArray(value)) {
+          return value.map(v => resolveValue(v));
+        }
+
+        if (value !== null && typeof value === 'object') {
+          const resolved: any = {};
+          for (const [k, v] of Object.entries(value)) {
+            resolved[k] = resolveValue(v);
+          }
+          return resolved;
+        }
+
+        return value;
+      };
+
+      return resolveValue(args);
+    };
+
     // Цикл обработки инструментов
     let iteration = 0;
     
@@ -438,20 +476,28 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
       
       // Выполняем инструменты
       const toolResponseParts: Part[] = [];
+      // Результаты вызовов в рамках ТЕКУЩЕЙ итерации (для подстановки ссылок $N.createdId)
+      const callResults: Array<{ result: string; createdId?: string }> = [];
       
-      for (const call of toolCalls) {
+      for (let index = 0; index < toolCalls.length; index++) {
+        const call = toolCalls[index];
         if (!call) continue;
         
-        console.log(`[Service] Executing tool: ${call.name}`, call.args);
+        // Перед выполнением инструмента разрешаем ссылки вида $N.createdId в аргументах
+        const resolvedArgs = resolveReferences(call.args, callResults);
+        
+        console.log(`[Service] Executing tool: ${call.name}`, resolvedArgs);
         
         const tool = enabledTools.find(t => t.definition.name === call.name);
         
         let executionResult = "Ошибка: Инструмент не найден или отключен.";
+        let createdId: string | undefined = undefined;
+        
         if (tool) {
           // Валидация обязательных аргументов
           const requiredParams = tool.definition.parameters?.required || [];
           const missingParams = requiredParams.filter(param => 
-            call.args?.[param] === undefined || call.args?.[param] === null || call.args?.[param] === ''
+            resolvedArgs?.[param] === undefined || resolvedArgs?.[param] === null || resolvedArgs?.[param] === ''
           );
           
           if (missingParams.length > 0) {
@@ -459,9 +505,10 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
             console.warn(`[Service] ⚠️ Validation failed for ${call.name}:`, missingParams);
           } else {
             try {
-              const execution = tool.apply(workingState, call.args);
+              const execution = tool.apply(workingState, resolvedArgs);
               workingState = execution.newState;
               executionResult = execution.result;
+              createdId = execution.createdId;
             } catch (e: any) {
               executionResult = `Ошибка выполнения: ${e.message}`;
               console.error(`[Service] ❌ Tool execution error for ${call.name}:`, e);
@@ -469,13 +516,16 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
           }
         }
 
+        // Сохраняем результат для возможных ссылок из последующих вызовов
+        callResults.push({ result: executionResult, createdId });
+        
         toolLogs.push({
           name: call.name,
-          args: call.args,
+          args: resolvedArgs,
           result: executionResult,
           iteration: iteration
         });
-
+        
         toolResponseParts.push({
           functionResponse: {
             name: call.name,
@@ -529,22 +579,29 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
     if (lastCandidates && lastCandidates.length > 0) {
       const lastContent = lastCandidates[0].content;
       
-      // Обрабатываем оставшиеся tool calls
-      const remainingToolCalls = lastContent.parts?.filter(p => p.functionCall).map(p => p.functionCall) || [];
-      if (remainingToolCalls.length > 0) {
+      // Проверяем, что lastContent существует и имеет parts
+      if (lastContent && lastContent.parts) {
+        // Обрабатываем оставшиеся tool calls
+        const remainingToolCalls = lastContent.parts.filter(p => p.functionCall).map(p => p.functionCall) || [];
+        if (remainingToolCalls.length > 0) {
         const toolResponseParts: Part[] = [];
+        const remainingCallResults: Array<{ result: string; createdId?: string }> = [];
         
-        for (const call of remainingToolCalls) {
+        for (let index = 0; index < remainingToolCalls.length; index++) {
+          const call = remainingToolCalls[index];
           if (!call) continue;
+
+          const resolvedArgs = resolveReferences(call.args, remainingCallResults);
           
           const tool = enabledTools.find(t => t.definition.name === call.name);
           let executionResult = "Ошибка: Инструмент не найден или отключен.";
+          let createdId: string | undefined = undefined;
           
           if (tool) {
             // Валидация обязательных аргументов
             const requiredParams = tool.definition.parameters?.required || [];
             const missingParams = requiredParams.filter(param => 
-              call.args?.[param] === undefined || call.args?.[param] === null || call.args?.[param] === ''
+              resolvedArgs?.[param] === undefined || resolvedArgs?.[param] === null || resolvedArgs?.[param] === ''
             );
             
             if (missingParams.length > 0) {
@@ -552,9 +609,10 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
               console.warn(`[Service] ⚠️ Validation failed for ${call.name}:`, missingParams);
             } else {
               try {
-                const execution = tool.apply(workingState, call.args);
+                const execution = tool.apply(workingState, resolvedArgs);
                 workingState = execution.newState;
                 executionResult = execution.result;
+                createdId = execution.createdId;
               } catch (e: any) {
                 executionResult = `Ошибка выполнения: ${e.message}`;
                 console.error(`[Service] ❌ Tool execution error for ${call.name}:`, e);
@@ -562,13 +620,15 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
             }
           }
 
+          remainingCallResults.push({ result: executionResult, createdId });
+          
           toolLogs.push({
             name: call.name,
-            args: call.args,
+            args: resolvedArgs,
             result: executionResult,
             iteration: iteration // Последняя итерация
           });
-
+          
           toolResponseParts.push({
             functionResponse: {
               name: call.name,
@@ -580,6 +640,7 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
         
         conversationHistory.push(lastContent);
         conversationHistory.push({ role: 'user', parts: toolResponseParts });
+        }
       }
     }
 

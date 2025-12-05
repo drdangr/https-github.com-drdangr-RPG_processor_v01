@@ -164,5 +164,12 @@ export interface TurnHistory {
 // Modular Tool Definition
 export interface GameTool {
   definition: FunctionDeclaration;
-  apply: (state: GameState, args: any) => { newState: GameState; result: string };
+  /**
+   * apply:
+   * - newState: обновлённое состояние мира
+   * - result: человекочитаемое описание результата
+   * - createdId (опционально): ID созданной сущности, который может использоваться
+   *   в последующих вызовах инструментов в рамках одного ответа модели
+   */
+  apply: (state: GameState, args: any) => { newState: GameState; result: string; createdId?: string };
 }

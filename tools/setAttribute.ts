@@ -16,7 +16,7 @@ const tool: GameTool = {
         },
         entityId: {
           type: Type.STRING,
-          description: "Реальный ID сущности из состояния мира. Для объектов формат: obj_timestamp_suffix. Не выдумывай ID - используй только существующие."
+          description: "Реальный ID сущности из состояния мира. Для объектов формат: obj_timestamp_suffix. Для только что созданных объектов в этом же ответе модели можно использовать ссылку на результат вызова create_object в формате $N.createdId (где N — индекс вызова create_object в общем списке вызовов этого ответа, начиная с 0). Например: если create_object был вторым вызовом (после move_player), используй $1.createdId. Не выдумывай ID - используй только существующие или ссылки $N.createdId."
         },
         attributeName: {
           type: Type.STRING,
