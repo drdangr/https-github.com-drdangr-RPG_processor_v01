@@ -68,6 +68,93 @@ const calculateCost = (tokenUsage: TokenUsage, modelId: string): CostInfo | null
   };
 };
 
+// ============================================================================
+// БЕЗОПАСНЫЕ ХЕЛПЕРЫ ДЛЯ РАБОТЫ С ОТВЕТАМИ GEMINI API
+// ============================================================================
+// Единая точка доступа к структуре ответа API с валидацией
+// Это предотвращает ошибки "Cannot read properties of undefined"
+
+interface ResponseContentData {
+  content: Content;
+  parts: Part[];
+}
+
+/**
+ * Безопасно извлекает content и parts из ответа Gemini API
+ * @returns { content, parts } или null, если структура невалидна
+ */
+const getResponseContent = (response: any): ResponseContentData | null => {
+  if (!response?.candidates || !Array.isArray(response.candidates) || response.candidates.length === 0) {
+    return null;
+  }
+  
+  const candidate = response.candidates[0];
+  if (!candidate?.content) {
+    return null;
+  }
+  
+  const parts = candidate.content.parts || [];
+  return {
+    content: candidate.content,
+    parts
+  };
+};
+
+/**
+ * Безопасно извлекает tool calls из ответа
+ * @returns массив function calls или пустой массив
+ */
+const getToolCalls = (response: any): Array<{ name: string; id: string; args: any }> => {
+  const contentData = getResponseContent(response);
+  if (!contentData) return [];
+  
+  return contentData.parts
+    .filter(p => p.functionCall)
+    .map(p => p.functionCall!);
+};
+
+/**
+ * Безопасно извлекает текстовые части из ответа
+ * @param excludeThoughts - исключить части с thought: true и thinking-подобные тексты
+ * @returns массив текстовых строк
+ */
+const getTextParts = (response: any, excludeThoughts: boolean = false): string[] => {
+  const contentData = getResponseContent(response);
+  if (!contentData) return [];
+  
+  return contentData.parts
+    .filter(p => {
+      if (!p.text) return false;
+      if (excludeThoughts && p.thought === true) return false;
+      if (excludeThoughts) {
+        const text = p.text.trim();
+        if (text.startsWith('**Analysis') || 
+            text.startsWith('**Thinking') || 
+            text.startsWith('**Okay') || 
+            text.startsWith('Okay,')) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .map(p => p.text!)
+    .filter(Boolean);
+};
+
+/**
+ * Безопасно извлекает thinking части из ответа
+ * @returns массив текстов thinking
+ */
+const getThoughtParts = (response: any): string[] => {
+  const contentData = getResponseContent(response);
+  if (!contentData) return [];
+  
+  return contentData.parts
+    .filter(p => p.thought === true && p.text)
+    .map(p => p.text!)
+    .filter(Boolean);
+};
+
 // Стандартный системный промпт для симуляции (с инструментами)
 export const DEFAULT_SYSTEM_PROMPT = `Ты - продвинутый ИИ Гейм-Мастер (Ведущий). Твоя задача - изменять состояние мира через инструменты.
 
@@ -249,7 +336,8 @@ export const processGameTurn = async (
       calls: any[],
       state: GameState,
       tools: GameTool[],
-      iteration: number
+      iteration: number,
+      resolveReferences: (args: any, results: Array<{ result: string; createdId?: string }>) => any
     ): {
       newState: GameState;
       logs: ToolCallLog[];
@@ -258,20 +346,28 @@ export const processGameTurn = async (
       const toolResponseParts: Part[] = [];
       const logs: ToolCallLog[] = [];
       let newState = state;
+      // Результаты вызовов в рамках ТЕКУЩЕЙ итерации (для подстановки ссылок $N.createdId)
+      const callResults: Array<{ result: string; createdId?: string }> = [];
       
-      for (const call of calls) {
+      for (let index = 0; index < calls.length; index++) {
+        const call = calls[index];
         if (!call) continue;
         
-        console.log(`[Service] Executing tool: ${call.name}`, call.args);
+        // Перед выполнением инструмента разрешаем ссылки вида $N.createdId в аргументах
+        const resolvedArgs = resolveReferences(call.args, callResults);
+        
+        console.log(`[Service] Executing tool: ${call.name}`, resolvedArgs);
         
         const tool = tools.find(t => t.definition.name === call.name);
         
         let executionResult = "Ошибка: Инструмент не найден или отключен.";
+        let createdId: string | undefined = undefined;
+        
         if (tool) {
           // Валидация обязательных аргументов
           const requiredParams = tool.definition.parameters?.required || [];
           const missingParams = requiredParams.filter(param => 
-            call.args?.[param] === undefined || call.args?.[param] === null || call.args?.[param] === ''
+            resolvedArgs?.[param] === undefined || resolvedArgs?.[param] === null || resolvedArgs?.[param] === ''
           );
           
           if (missingParams.length > 0) {
@@ -279,9 +375,10 @@ export const processGameTurn = async (
             console.warn(`[Service] ⚠️ Validation failed for ${call.name}:`, missingParams);
           } else {
             try {
-              const execution = tool.apply(newState, call.args);
+              const execution = tool.apply(newState, resolvedArgs);
               newState = execution.newState;
               executionResult = execution.result;
+              createdId = execution.createdId;
             } catch (e: any) {
               executionResult = `Ошибка выполнения: ${e.message}`;
               console.error(`[Service] ❌ Tool execution error for ${call.name}:`, e);
@@ -289,9 +386,12 @@ export const processGameTurn = async (
           }
         }
         
+        // Сохраняем результат для возможных ссылок из последующих вызовов
+        callResults.push({ result: executionResult, createdId });
+        
         logs.push({
           name: call.name,
-          args: call.args,
+          args: resolvedArgs,
           result: executionResult,
           iteration: iteration
         });
@@ -430,13 +530,12 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
     // Функция для извлечения thoughts из ответа
     const extractThoughts = (resp: any, isNarrative: boolean = false, iteration?: number) => {
       try {
-        const candidates = resp?.candidates;
-        if (candidates && candidates.length > 0) {
-          const candidate = candidates[0];
-          const parts = candidate.content?.parts || [];
-          
-          const prefix = isNarrative ? "🎭 Narrative" : "⚙️ Simulation";
-          const debugInfo = isNarrative ? narrativeDebugInfo : simulationDebugInfo;
+        const contentData = getResponseContent(resp);
+        if (!contentData) return;
+        
+        const parts = contentData.parts;
+        const prefix = isNarrative ? "🎭 Narrative" : "⚙️ Simulation";
+        const debugInfo = isNarrative ? narrativeDebugInfo : simulationDebugInfo;
           
           // Для симуляции сохраняем информацию по каждой итерации
           if (!isNarrative && iteration !== undefined) {
@@ -453,24 +552,43 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
               },
               functionCallsCount: parts.filter((p: any) => p.functionCall).length,
               allParts: parts.map((p: any, idx: number) => {
-                let type: 'text' | 'thought' | 'functionCall' | 'unknown' = 'unknown';
+                let type: 'text' | 'thought' | 'functionCall' | 'empty' | 'unknown' = 'unknown';
                 let content = '';
+                let details: string[] = []; // Дополнительная информация о части
                 
                 if (p.thought === true && p.text) {
                   type = 'thought';
                   content = p.text;
+                  details.push('thinking mode');
                 } else if (p.text) {
                   type = 'text';
                   content = p.text;
                 } else if (p.functionCall) {
                   type = 'functionCall';
-                  content = JSON.stringify({ name: p.functionCall.name, args: p.functionCall.args }, null, 2);
+                  content = JSON.stringify({ 
+                    name: p.functionCall.name, 
+                    id: p.functionCall.id,
+                    args: p.functionCall.args 
+                  }, null, 2);
+                  details.push(`tool: ${p.functionCall.name}`);
+                } else {
+                  // Детальная диагностика пустой части
+                  const hasFields = Object.keys(p).filter(k => k !== 'text' && k !== 'functionCall' && k !== 'thought');
+                  if (hasFields.length === 0) {
+                    type = 'empty';
+                    details.push('нет данных');
+                  } else {
+                    type = 'unknown';
+                    details.push(`поля: ${hasFields.join(', ')}`);
+                    content = JSON.stringify(p, null, 2);
+                  }
                 }
                 
                 return {
                   type,
                   content,
-                  length: content.length
+                  length: content.length,
+                  details: details.join(', ') // Дополнительная информация
                 };
               })
             };
@@ -496,33 +614,49 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
             };
             
             debugInfo.allParts = parts.map((p: any, idx: number) => {
-              let type: 'text' | 'thought' | 'functionCall' | 'unknown' = 'unknown';
+              let type: 'text' | 'thought' | 'functionCall' | 'empty' | 'unknown' = 'unknown';
               let content = '';
+              let details: string[] = []; // Дополнительная информация о части
               
               if (p.thought === true && p.text) {
                 type = 'thought';
                 content = p.text;
+                details.push('thinking mode');
               } else if (p.text) {
                 type = 'text';
                 content = p.text;
               } else if (p.functionCall) {
                 type = 'functionCall';
-                content = JSON.stringify({ name: p.functionCall.name, args: p.functionCall.args }, null, 2);
+                content = JSON.stringify({ 
+                  name: p.functionCall.name, 
+                  id: p.functionCall.id,
+                  args: p.functionCall.args 
+                }, null, 2);
+                details.push(`tool: ${p.functionCall.name}`);
+              } else {
+                // Детальная диагностика пустой части
+                const hasFields = Object.keys(p).filter(k => k !== 'text' && k !== 'functionCall' && k !== 'thought');
+                if (hasFields.length === 0) {
+                  type = 'empty';
+                  details.push('нет данных');
+                } else {
+                  type = 'unknown';
+                  details.push(`поля: ${hasFields.join(', ')}`);
+                  content = JSON.stringify(p, null, 2);
+                }
               }
               
               return {
                 type,
                 content,
-                length: content.length
+                length: content.length,
+                details: details.join(', ') // Дополнительная информация
               };
             });
             
             const functionCalls = parts.filter((p: any) => p.functionCall);
             debugInfo.functionCallsCount = functionCalls.length;
           }
-          
-          // Ищем части с thought: true
-          const thoughtParts = parts.filter((p: any) => p.thought === true && p.text);
           
           // Логируем для консоли
           const functionCalls = parts.filter((p: any) => p.functionCall);
@@ -531,8 +665,10 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
             console.log(`[Service] ${prefix} Found ${functionCalls.length} function calls in response`);
           }
           
-          if (thoughtParts.length > 0) {
-            const thoughts = thoughtParts.map((p: any) => p.text).join('\n');
+          // Извлекаем thinking части через хелпер
+          const thoughtTexts = getThoughtParts(resp);
+          if (thoughtTexts.length > 0) {
+            const thoughts = thoughtTexts.join('\n');
             if (thoughts) {
               // Сохраняем в соответствующий массив
               if (isNarrative) {
@@ -556,7 +692,6 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
               }
             });
           }
-        }
       } catch (e) {
         console.warn("[Service] Could not extract thoughts:", e);
       }
@@ -571,25 +706,64 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
       simulationTokenUsages.push(firstTokenUsage);
     }
 
+    // Вспомогательная функция: подстановка ссылок вида $N.createdId в аргументы вызова инструмента
+    const resolveReferences = (
+      args: any,
+      results: Array<{ result: string; createdId?: string }>
+    ): any => {
+      if (!args) return args;
+
+      const resolveValue = (value: any): any => {
+        if (typeof value === 'string') {
+          // Заменяем шаблоны вида $0.createdId, $1.createdId и т.п. на реальные ID,
+          // которые вернули предыдущие вызовы инструментов в рамках этого ответа.
+          return value.replace(/\$(\d+)\.createdId/g, (match, indexStr) => {
+            const index = parseInt(indexStr, 10);
+            const createdId = results[index]?.createdId;
+            // Если по какой-то причине ссылка не может быть разрешена — оставляем как есть,
+            // чтобы система валидации/логов отразила проблему явно.
+            return createdId || match;
+          });
+        }
+
+        if (Array.isArray(value)) {
+          return value.map(v => resolveValue(v));
+        }
+
+        if (value !== null && typeof value === 'object') {
+          const resolved: any = {};
+          for (const [k, v] of Object.entries(value)) {
+            resolved[k] = resolveValue(v);
+          }
+          return resolved;
+        }
+
+        return value;
+      };
+
+      return resolveValue(args);
+    };
+
     // Цикл обработки инструментов
     let iteration = 0;
     
     while (iteration < settings.maxIterations) {
-      const candidates = response.candidates;
+      // Безопасно извлекаем content и tool calls из ответа
+      const contentData = getResponseContent(response);
       
-      if (!candidates || candidates.length === 0) {
-        console.error("[Service] ❌ candidates пуст или отсутствует");
+      if (!contentData) {
+        console.error("[Service] ❌ Не удалось извлечь содержимое ответа");
         return {
-          narrative: "Ошибка: ИИ не вернул вариантов ответа.",
+          narrative: "Ошибка: ИИ не вернул валидного ответа.",
           toolLogs,
           newState: workingState
         };
       }
 
-      const assistantContent = candidates[0].content;
+      const assistantContent = contentData.content;
       
       // Извлекаем tool calls из ответа
-      const toolCalls = assistantContent.parts?.filter(p => p.functionCall).map(p => p.functionCall) || [];
+      const toolCalls = getToolCalls(response);
       
       // Если нет tool calls — выходим из цикла
       // НО не используем narrative из этого ответа - финальный запрос сгенерирует лучший нарратив
@@ -602,13 +776,15 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
       console.log(`[Service] Iteration ${iteration}: Processing ${toolCalls.length} tool calls...`);
       
       // Выполняем инструменты используя вынесенную функцию
-      const executionResult = executeToolCalls(toolCalls, workingState, enabledTools, iteration);
+      const executionResult = executeToolCalls(toolCalls, workingState, enabledTools, iteration, resolveReferences);
       workingState = executionResult.newState;
       toolLogs.push(...executionResult.logs);
       const toolResponseParts = executionResult.responseParts;
 
       // Добавляем ответ ассистента и результаты инструментов в историю
-      conversationHistory.push(assistantContent);
+      if (assistantContent) {
+        conversationHistory.push(assistantContent);
+      }
       conversationHistory.push({ role: 'user', parts: toolResponseParts });
 
       console.log(`[Service] Iteration ${iteration}: Sending tool results back to AI...`);
@@ -647,14 +823,15 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
     }
     
     // Добавляем последний ответ в историю если есть
-    const lastCandidates = response.candidates;
-    if (lastCandidates && lastCandidates.length > 0) {
-      const lastContent = lastCandidates[0].content;
+    // Безопасно извлекаем content и tool calls из последнего ответа
+    const lastContentData = getResponseContent(response);
+    if (lastContentData) {
+      const lastContent = lastContentData.content;
+      const remainingToolCalls = getToolCalls(response);
       
       // Обрабатываем оставшиеся tool calls используя вынесенную функцию
-      const remainingToolCalls = lastContent.parts?.filter(p => p.functionCall).map(p => p.functionCall) || [];
       if (remainingToolCalls.length > 0) {
-        const executionResult = executeToolCalls(remainingToolCalls, workingState, enabledTools, iteration);
+        const executionResult = executeToolCalls(remainingToolCalls, workingState, enabledTools, iteration, resolveReferences);
         workingState = executionResult.newState;
         toolLogs.push(...executionResult.logs);
         const toolResponseParts = executionResult.responseParts;
@@ -752,9 +929,11 @@ ${locationsList}
     // Извлекаем информацию о токенах из финального ответа
     narrativeTokenUsage = extractTokenUsage(finalResponse);
 
-    if (finalResponse.candidates && finalResponse.candidates.length > 0) {
-      const finalContent = finalResponse.candidates[0].content;
-      const allParts = finalContent.parts || [];
+    // Безопасно извлекаем текстовые части из финального ответа
+    const finalContentData = getResponseContent(finalResponse);
+    
+    if (finalContentData) {
+      const allParts = finalContentData.parts;
       
       // Логируем все части для отладки
       console.log("[Service] 🎭 Narrative response parts:", allParts.map((p: any, idx: number) => ({
@@ -764,17 +943,9 @@ ${locationsList}
         textPreview: p.text?.substring(0, 100)
       })));
       
-      // Фильтруем thinking части и текст, похожий на thinking
-      const textParts = allParts.filter((p: any) => {
-        if (!p.text) return false;
-        if (p.thought === true) return false;
-        // Дополнительная фильтрация thinking, который не помечен флагом
-        const text = p.text.trim();
-        if (text.startsWith('**Analysis') || text.startsWith('**Thinking') || text.startsWith('**Okay') || text.startsWith('Okay,')) return false;
-        return true;
-      });
-      
-      narrative = textParts.map((p: any) => p.text).filter(Boolean).join(' ');
+      // Извлекаем текстовые части (исключая thinking)
+      const textParts = getTextParts(finalResponse, true);
+      narrative = textParts.join(' ');
       
       // Если narrative пустой, но есть finalResponse.text - используем его
       if (!narrative && finalResponse.text) {
@@ -790,6 +961,11 @@ ${locationsList}
         wordCount: narrative.split(/\s+/).length,
         preview: narrative.substring(0, 150) + (narrative.length > 150 ? '...' : '')
       });
+    } else {
+      console.warn("[Service] 🎭 Не удалось извлечь содержимое финального ответа");
+      narrative = toolLogs.length > 0 
+        ? "Действие обработано." 
+        : "Ничего не произошло.";
     }
 
     // Fallback если нарратив пустой

@@ -10,26 +10,29 @@ export interface LocationData {
   name: string;
   description: string;
   currentSituation: string;
+  state: string; // Dynamic state (e.g., "quiet", "crowded")
   connections: Array<{
     targetLocationId: string;
     type: 'in' | 'out' | 'bidirectional';
   }>;
-  attributes: Record<string, string>; // Нарративные характеристики локации
 }
 
 export interface PlayerData {
   id: string;
   name: string;
   description: string;
+  inventory: string[]; // Array of Object IDs
+  health: number;
+  state: string; // e.g., "drunk", "tired"
   locationId: string; // Explicit location tracking
-  attributes: Record<string, string>; // Нарративные характеристики игрока
 }
 
 export interface ObjectData {
   id: string;
   name: string;
+  description: string;
   connectionId: string; // ID of Player, Location, or other Object
-  attributes: Record<string, string>; // Нарративные характеристики объекта
+  state: string; // e.g., "broken", "working"
 }
 
 export interface GameState {
@@ -43,126 +46,76 @@ export interface ToolCallLog {
   name: string;
   args: any;
   result: string;
-  iteration: number; // Номер итерации (шага) в многоходовом цикле
-}
-
-export interface TokenUsage {
-  promptTokens: number;
-  candidatesTokens: number;
-  totalTokens: number;
-}
-
-export interface CostInfo {
-  inputCost: number; // Стоимость входных токенов в долларах
-  outputCost: number; // Стоимость выходных токенов в долларах
-  totalCost: number; // Общая стоимость в долларах
-  model: string; // Модель, для которой рассчитана стоимость
 }
 
 export interface SimulationResult {
   narrative: string;
   toolLogs: ToolCallLog[];
   newState: GameState;
-  thinking?: string; // Мысли модели (reasoning) - устаревшее, используйте simulationThinking и narrativeThinking
-  simulationThinking?: string; // Мысли модели во время симуляции (вызов инструментов)
-  narrativeThinking?: string; // Мысли модели во время генерации нарратива
-  tokenUsage?: {
-    simulation: TokenUsage; // Токены использованные в симуляции (все итерации)
-    narrative: TokenUsage; // Токены использованные в нарративе
-    total: TokenUsage; // Общее использование токенов
-  };
-  costInfo?: CostInfo; // Информация о стоимости хода
-  simulationDebugInfo?: {
-    responseStructure?: {
-      totalParts: number;
-      partTypes: Array<{
-        hasText: boolean;
-        hasThought: boolean;
-        hasFunctionCall: boolean;
-        textLength: number;
-      }>;
-    };
-    functionCallsCount?: number;
-    allParts?: Array<{
-      type: 'text' | 'thought' | 'functionCall' | 'unknown';
-      content: string;
-      length: number;
-    }>;
-  };
-  narrativeDebugInfo?: {
-    responseStructure?: {
-      totalParts: number;
-      partTypes: Array<{
-        hasText: boolean;
-        hasThought: boolean;
-        hasFunctionCall: boolean;
-        textLength: number;
-      }>;
-    };
-    functionCallsCount?: number;
-    allParts?: Array<{
-      type: 'text' | 'thought' | 'functionCall' | 'unknown';
-      content: string;
-      length: number;
-    }>;
-  };
-}
-
-// Настройки AI
-export interface AISettings {
-  modelId: string;
-  maxIterations: number;
-  temperature: number;
-  thinkingBudget: number;
-  systemPromptOverride?: string; // Если задан, заменяет стандартный промпт
-  systemPromptPresetId?: string; // ID выбранного пресета для симуляции
-  
-  // Настройки для финального нарративного запроса (опционально)
-  narrativeModelId?: string; // Если не задан, используется modelId
-  narrativeTemperature?: number; // Если не задан, используется temperature
-  narrativeThinkingBudget?: number; // Если не задан, используется thinkingBudget
-  narrativePromptOverride?: string; // Если задан, используется вместо systemPromptOverride для нарратива
-  narrativePromptPresetId?: string; // ID выбранного пресета для нарратива
-}
-
-export const DEFAULT_AI_SETTINGS: AISettings = {
-  modelId: 'gemini-flash-latest', // Flash Latest для симуляции
-  maxIterations: 1,
-  temperature: 0.6, // Температура для симуляции
-  thinkingBudget: 2048,
-  narrativeModelId: 'gemini-flash-lite-latest', // Flash Lite Latest для нарратива
-  narrativeTemperature: 0.8, // Температура для нарратива
-};
-
-export const AVAILABLE_MODELS = [
-  // Только модели со скриншота Google AI Studio
-  
-  // Gemini 2.5 Pro - advanced reasoning, best for complex logic
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro — $1.25/$10.00 (продвинутая логика)' },
-  
-  // Gemini Flash Latest - алиас на preview версию
-  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest — $0.30/$2.50' },
-  
-  // Gemini Flash-Lite Latest - алиас на preview версию
-  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest — $0.10/$0.40' },
-  
-  // Gemini 2.5 Flash - hybrid reasoning, 1M context
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash — $0.30/$2.50 (рекомендуется)' },
-  
-  // Gemini 2.5 Flash-Lite - most cost effective
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite — $0.10/$0.40 (самая дешёвая)' },
-];
-
-// История ходов игры
-export interface TurnHistory {
-  turn: number;
-  userPrompt: string;        // Запрос игрока
-  narrative: string;         // Нарративное описание с разметкой [type:ID:name]
-  toolLogs: ToolCallLog[];   // Лог выполненных инструментов
 }
 
 // Modular Tool Definition
 export interface GameTool {
   definition: FunctionDeclaration;
-  apply: (state: GameState, args: any) => { newState: GameState; result: string };
+  apply: (state: GameState, args: any) => { newState: GameState; result: string; createdId?: string };
+}
+
+// AI Settings
+export interface AISettings {
+  modelId: string;
+  maxIterations: number;
+  temperature: number;
+  thinkingBudget: number;
+  systemPromptOverride?: string;
+  systemPromptPresetId?: string;
+  narrativePromptOverride?: string;
+  narrativePromptPresetId?: string;
+  narrativeModelId?: string;
+  narrativeTemperature?: number;
+  narrativeThinkingBudget?: number;
+}
+
+export const DEFAULT_AI_SETTINGS: AISettings = {
+  modelId: 'gemini-flash-latest',
+  maxIterations: 5,
+  temperature: 0.6,
+  thinkingBudget: 8192,
+  narrativeModelId: 'gemini-flash-lite-latest',
+  narrativeTemperature: 0.8,
+};
+
+// Available Models
+export interface ModelInfo {
+  id: string;
+  name: string;
+}
+
+export const AVAILABLE_MODELS: ModelInfo[] = [
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite Latest' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite' },
+];
+
+// Token Usage
+export interface TokenUsage {
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+}
+
+// Cost Info
+export interface CostInfo {
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
+}
+
+// Turn History
+export interface TurnHistory {
+  turn: number;
+  userPrompt: string;
+  narrative: string;
+  toolLogs: ToolCallLog[];
 }
