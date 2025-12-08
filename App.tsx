@@ -1539,15 +1539,23 @@ const App: React.FC = () => {
                                                             <strong>Структура ответа:</strong> {lastResult.simulationDebugInfo.responseStructure.totalParts} частей
                                                         </p>
                                                         <div className="text-[8px] text-cyan-200/50 font-mono space-y-1">
-                                                            {lastResult.simulationDebugInfo.responseStructure.partTypes.map((part: any, idx: number) => (
-                                                                <div key={idx} className="flex gap-2">
-                                                                    <span>Часть {idx + 1}:</span>
-                                                                    {part.hasText && <span className="text-green-400">text</span>}
-                                                                    {part.hasThought && <span className="text-yellow-400">thought</span>}
-                                                                    {part.hasFunctionCall && <span className="text-red-400">functionCall</span>}
-                                                                    {part.textLength > 0 && <span>({part.textLength} символов)</span>}
-                                                                </div>
-                                                            ))}
+                                                            {lastResult.simulationDebugInfo.responseStructure.partTypes.map((part: any, idx: number) => {
+                                                                const types: string[] = [];
+                                                                if (part.hasText) types.push('📝 текст');
+                                                                if (part.hasThought) types.push('💭 мысль');
+                                                                if (part.hasFunctionCall) types.push('🔧 инструмент');
+                                                                if (types.length === 0) types.push('⚪ пусто');
+                                                                
+                                                                return (
+                                                                    <div key={idx} className="flex gap-2 items-center">
+                                                                        <span className="text-cyan-400">Часть {idx + 1}:</span>
+                                                                        <span className="text-green-300">{types.join(', ')}</span>
+                                                                        {part.textLength > 0 && (
+                                                                            <span className="text-gray-500">({part.textLength} симв.)</span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 )}
@@ -1564,17 +1572,59 @@ const App: React.FC = () => {
                                                             Показать все части ответа ({lastResult.simulationDebugInfo.allParts.length})
                                                         </summary>
                                                         <div className="mt-2 space-y-2">
-                                                            {lastResult.simulationDebugInfo.allParts.map((part: any, idx: number) => (
-                                                                <div key={idx} className="bg-black/30 rounded p-2 border border-cyan-900/30">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <span className="text-[8px] font-bold text-cyan-400">{part.type.toUpperCase()}</span>
-                                                                        <span className="text-[8px] text-gray-500">({part.length} символов)</span>
+                                                            {lastResult.simulationDebugInfo.allParts.map((part: any, idx: number) => {
+                                                                const getTypeLabel = (type: string) => {
+                                                                    const labels: Record<string, string> = {
+                                                                        'text': '📝 Текст',
+                                                                        'thought': '💭 Мысль',
+                                                                        'functionCall': '🔧 Вызов инструмента',
+                                                                        'empty': '⚪ Пустая часть',
+                                                                        'unknown': '❓ Неизвестный тип'
+                                                                    };
+                                                                    return labels[type] || type.toUpperCase();
+                                                                };
+                                                                
+                                                                const getTypeColor = (type: string) => {
+                                                                    const colors: Record<string, string> = {
+                                                                        'text': 'text-green-400',
+                                                                        'thought': 'text-yellow-400',
+                                                                        'functionCall': 'text-red-400',
+                                                                        'empty': 'text-gray-400',
+                                                                        'unknown': 'text-orange-400'
+                                                                    };
+                                                                    return colors[type] || 'text-cyan-400';
+                                                                };
+                                                                
+                                                                return (
+                                                                    <div key={idx} className="bg-black/30 rounded p-2 border border-cyan-900/30">
+                                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                                            <span className={`text-[8px] font-bold ${getTypeColor(part.type)}`}>
+                                                                                {getTypeLabel(part.type)}
+                                                                            </span>
+                                                                            {part.length > 0 && (
+                                                                                <span className="text-[8px] text-gray-500">
+                                                                                    ({part.length} символов)
+                                                                                </span>
+                                                                            )}
+                                                                            {part.details && (
+                                                                                <span className="text-[7px] text-gray-600 italic">
+                                                                                    {part.details}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        {part.content && part.length > 0 && (
+                                                                            <pre className="text-[8px] text-cyan-200/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
+                                                                                {part.content.substring(0, 500)}{part.content.length > 500 ? '...' : ''}
+                                                                            </pre>
+                                                                        )}
+                                                                        {part.length === 0 && (
+                                                                            <p className="text-[8px] text-gray-600 italic">
+                                                                                Часть не содержит данных
+                                                                            </p>
+                                                                        )}
                                                                     </div>
-                                                                    <pre className="text-[8px] text-cyan-200/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
-                                                                        {part.content.substring(0, 500)}{part.content.length > 500 ? '...' : ''}
-                                                                    </pre>
-                                                                </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                     </details>
                                                 )}
@@ -1618,15 +1668,23 @@ const App: React.FC = () => {
                                                             <strong>Структура ответа:</strong> {lastResult.narrativeDebugInfo.responseStructure.totalParts} частей
                                                         </p>
                                                         <div className="text-[8px] text-purple-200/50 font-mono space-y-1">
-                                                            {lastResult.narrativeDebugInfo.responseStructure.partTypes.map((part: any, idx: number) => (
-                                                                <div key={idx} className="flex gap-2">
-                                                                    <span>Часть {idx + 1}:</span>
-                                                                    {part.hasText && <span className="text-green-400">text</span>}
-                                                                    {part.hasThought && <span className="text-yellow-400">thought</span>}
-                                                                    {part.hasFunctionCall && <span className="text-red-400">functionCall</span>}
-                                                                    {part.textLength > 0 && <span>({part.textLength} символов)</span>}
-                                                                </div>
-                                                            ))}
+                                                            {lastResult.narrativeDebugInfo.responseStructure.partTypes.map((part: any, idx: number) => {
+                                                                const types: string[] = [];
+                                                                if (part.hasText) types.push('📝 текст');
+                                                                if (part.hasThought) types.push('💭 мысль');
+                                                                if (part.hasFunctionCall) types.push('🔧 инструмент');
+                                                                if (types.length === 0) types.push('⚪ пусто');
+                                                                
+                                                                return (
+                                                                    <div key={idx} className="flex gap-2 items-center">
+                                                                        <span className="text-purple-400">Часть {idx + 1}:</span>
+                                                                        <span className="text-green-300">{types.join(', ')}</span>
+                                                                        {part.textLength > 0 && (
+                                                                            <span className="text-gray-500">({part.textLength} симв.)</span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 )}
@@ -1643,17 +1701,59 @@ const App: React.FC = () => {
                                                             Показать все части ответа ({lastResult.narrativeDebugInfo.allParts.length})
                                                         </summary>
                                                         <div className="mt-2 space-y-2">
-                                                            {lastResult.narrativeDebugInfo.allParts.map((part: any, idx: number) => (
-                                                                <div key={idx} className="bg-black/30 rounded p-2 border border-purple-900/30">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <span className="text-[8px] font-bold text-purple-400">{part.type.toUpperCase()}</span>
-                                                                        <span className="text-[8px] text-gray-500">({part.length} символов)</span>
+                                                            {lastResult.narrativeDebugInfo.allParts.map((part: any, idx: number) => {
+                                                                const getTypeLabel = (type: string) => {
+                                                                    const labels: Record<string, string> = {
+                                                                        'text': '📝 Текст',
+                                                                        'thought': '💭 Мысль',
+                                                                        'functionCall': '🔧 Вызов инструмента',
+                                                                        'empty': '⚪ Пустая часть',
+                                                                        'unknown': '❓ Неизвестный тип'
+                                                                    };
+                                                                    return labels[type] || type.toUpperCase();
+                                                                };
+                                                                
+                                                                const getTypeColor = (type: string) => {
+                                                                    const colors: Record<string, string> = {
+                                                                        'text': 'text-green-400',
+                                                                        'thought': 'text-yellow-400',
+                                                                        'functionCall': 'text-red-400',
+                                                                        'empty': 'text-gray-400',
+                                                                        'unknown': 'text-orange-400'
+                                                                    };
+                                                                    return colors[type] || 'text-purple-400';
+                                                                };
+                                                                
+                                                                return (
+                                                                    <div key={idx} className="bg-black/30 rounded p-2 border border-purple-900/30">
+                                                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                                            <span className={`text-[8px] font-bold ${getTypeColor(part.type)}`}>
+                                                                                {getTypeLabel(part.type)}
+                                                                            </span>
+                                                                            {part.length > 0 && (
+                                                                                <span className="text-[8px] text-gray-500">
+                                                                                    ({part.length} символов)
+                                                                                </span>
+                                                                            )}
+                                                                            {part.details && (
+                                                                                <span className="text-[7px] text-gray-600 italic">
+                                                                                    {part.details}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                        {part.content && part.length > 0 && (
+                                                                            <pre className="text-[8px] text-purple-200/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
+                                                                                {part.content.substring(0, 500)}{part.content.length > 500 ? '...' : ''}
+                                                                            </pre>
+                                                                        )}
+                                                                        {part.length === 0 && (
+                                                                            <p className="text-[8px] text-gray-600 italic">
+                                                                                Часть не содержит данных
+                                                                            </p>
+                                                                        )}
                                                                     </div>
-                                                                    <pre className="text-[8px] text-purple-200/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
-                                                                        {part.content.substring(0, 500)}{part.content.length > 500 ? '...' : ''}
-                                                                    </pre>
-                                                                </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                     </details>
                                                 )}
