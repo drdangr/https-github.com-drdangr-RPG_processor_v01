@@ -157,8 +157,173 @@ export const processGameTurn = async (
     const toolDefinitions = enabledTools.map(t => t.definition);
     const geminiTools: Tool[] = toolDefinitions.length > 0 ? [{ functionDeclarations: toolDefinitions }] : [];
 
-    const createSystemInstruction = (state: GameState, isFinalNarrative: boolean = false) => {
+    // Оптимизация: создаем компактное состояние только с релевантными данными
+    // Это значительно снижает расход токенов при каждом шаге
+    const getRelevantState = (state: GameState): GameState => {
       const normalizedState = normalizeState(state);
+      
+      // Если игроков нет, возвращаем полное состояние (на всякий случай)
+      if (normalizedState.players.length === 0) {
+        console.log("[Service] No players found, returning full state");
+        return normalizedState;
+      }
+      
+      // Берем первого игрока (обычно он один)
+      const player = normalizedState.players[0];
+      const playerLocation = normalizedState.locations.find(l => l.id === player.locationId);
+      
+      if (!playerLocation) {
+        console.warn("[Service] Player location not found, returning full state");
+        return normalizedState;
+      }
+      
+      // Находим соседние локации (для понимания доступных переходов)
+      const connectedLocationIds = new Set<string>();
+      playerLocation.connections.forEach(conn => {
+        connectedLocationIds.add(conn.targetLocationId);
+      });
+      
+      // Создаем компактные версии соседних локаций (только ID, name и connections)
+      const connectedLocations = normalizedState.locations
+        .filter(loc => connectedLocationIds.has(loc.id))
+        .map(loc => ({
+          id: loc.id,
+          name: loc.name,
+          description: "", // Убираем описание для экономии токенов
+          currentSituation: "", // Убираем текущую ситуацию
+          connections: loc.connections, // Оставляем connections для навигации
+          attributes: {} // Убираем атрибуты
+        }));
+      
+      // Находим объекты в текущей локации и у игрока
+      const relevantObjectIds = new Set<string>();
+      
+      // Объекты в локации
+      normalizedState.objects
+        .filter(obj => obj.connectionId === playerLocation.id)
+        .forEach(obj => relevantObjectIds.add(obj.id));
+      
+      // Объекты у игрока
+      normalizedState.objects
+        .filter(obj => obj.connectionId === player.id)
+        .forEach(obj => relevantObjectIds.add(obj.id));
+      
+      // Объекты в соседних локациях (для понимания контекста, но без деталей)
+      normalizedState.objects
+        .filter(obj => connectedLocationIds.has(obj.connectionId))
+        .forEach(obj => relevantObjectIds.add(obj.id));
+      
+      // Рекурсивно находим объекты внутри релевантных объектов (контейнеры)
+      const findNestedObjects = (parentId: string) => {
+        normalizedState.objects
+          .filter(obj => obj.connectionId === parentId)
+          .forEach(obj => {
+            if (!relevantObjectIds.has(obj.id)) {
+              relevantObjectIds.add(obj.id);
+              findNestedObjects(obj.id); // Рекурсивно ищем вложенные объекты
+            }
+          });
+      };
+      
+      // Находим вложенные объекты для всех релевантных объектов
+      Array.from(relevantObjectIds).forEach(objId => {
+        findNestedObjects(objId);
+      });
+      
+      const relevantObjects = normalizedState.objects.filter(obj => relevantObjectIds.has(obj.id));
+      
+      // Возвращаем компактное состояние
+      return {
+        world: normalizedState.world, // Мир всегда нужен
+        locations: [
+          playerLocation, // Текущая локация с полным описанием
+          ...connectedLocations // Соседние локации в компактном виде
+        ],
+        players: [player], // Только текущий игрок
+        objects: relevantObjects // Только релевантные объекты
+      };
+    };
+
+    // Вынесенная функция для выполнения tool calls (устраняет дублирование кода)
+    const executeToolCalls = (
+      calls: any[],
+      state: GameState,
+      tools: GameTool[],
+      iteration: number
+    ): {
+      newState: GameState;
+      logs: ToolCallLog[];
+      responseParts: Part[];
+    } => {
+      const toolResponseParts: Part[] = [];
+      const logs: ToolCallLog[] = [];
+      let newState = state;
+      
+      for (const call of calls) {
+        if (!call) continue;
+        
+        console.log(`[Service] Executing tool: ${call.name}`, call.args);
+        
+        const tool = tools.find(t => t.definition.name === call.name);
+        
+        let executionResult = "Ошибка: Инструмент не найден или отключен.";
+        if (tool) {
+          // Валидация обязательных аргументов
+          const requiredParams = tool.definition.parameters?.required || [];
+          const missingParams = requiredParams.filter(param => 
+            call.args?.[param] === undefined || call.args?.[param] === null || call.args?.[param] === ''
+          );
+          
+          if (missingParams.length > 0) {
+            executionResult = `Ошибка валидации: отсутствуют обязательные параметры: ${missingParams.join(', ')}`;
+            console.warn(`[Service] ⚠️ Validation failed for ${call.name}:`, missingParams);
+          } else {
+            try {
+              const execution = tool.apply(newState, call.args);
+              newState = execution.newState;
+              executionResult = execution.result;
+            } catch (e: any) {
+              executionResult = `Ошибка выполнения: ${e.message}`;
+              console.error(`[Service] ❌ Tool execution error for ${call.name}:`, e);
+            }
+          }
+        }
+        
+        logs.push({
+          name: call.name,
+          args: call.args,
+          result: executionResult,
+          iteration: iteration
+        });
+        
+        toolResponseParts.push({
+          functionResponse: {
+            name: call.name,
+            id: call.id,
+            response: { result: executionResult }
+          }
+        });
+      }
+      
+      return { newState, logs, responseParts: toolResponseParts };
+    };
+
+    const createSystemInstruction = (state: GameState, isFinalNarrative: boolean = false) => {
+      // Для финального нарратива используем полное состояние (нужно для разметки всех объектов)
+      // Для симуляции используем оптимизированное состояние
+      let stateToUse: GameState;
+      if (isFinalNarrative) {
+        stateToUse = normalizeState(state);
+      } else {
+        const fullState = normalizeState(state);
+        const relevantState = getRelevantState(state);
+        const fullSize = JSON.stringify(fullState).length;
+        const relevantSize = JSON.stringify(relevantState).length;
+        const savingsPercent = ((fullSize - relevantSize) / fullSize * 100).toFixed(1);
+        console.log(`[Service] 💾 State optimization: ${fullSize} → ${relevantSize} bytes (экономия ${savingsPercent}%)`);
+        stateToUse = relevantState;
+      }
+      const normalizedState = normalizeState(stateToUse);
       
       // Для нарратива и симуляции используем ТОЛЬКО то, что указано в пресете или поле
       // Нет fallback на DEFAULT_*_PROMPT - промпты должны быть явно заданы
@@ -436,54 +601,11 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
 
       console.log(`[Service] Iteration ${iteration}: Processing ${toolCalls.length} tool calls...`);
       
-      // Выполняем инструменты
-      const toolResponseParts: Part[] = [];
-      
-      for (const call of toolCalls) {
-        if (!call) continue;
-        
-        console.log(`[Service] Executing tool: ${call.name}`, call.args);
-        
-        const tool = enabledTools.find(t => t.definition.name === call.name);
-        
-        let executionResult = "Ошибка: Инструмент не найден или отключен.";
-        if (tool) {
-          // Валидация обязательных аргументов
-          const requiredParams = tool.definition.parameters?.required || [];
-          const missingParams = requiredParams.filter(param => 
-            call.args?.[param] === undefined || call.args?.[param] === null || call.args?.[param] === ''
-          );
-          
-          if (missingParams.length > 0) {
-            executionResult = `Ошибка валидации: отсутствуют обязательные параметры: ${missingParams.join(', ')}`;
-            console.warn(`[Service] ⚠️ Validation failed for ${call.name}:`, missingParams);
-          } else {
-            try {
-              const execution = tool.apply(workingState, call.args);
-              workingState = execution.newState;
-              executionResult = execution.result;
-            } catch (e: any) {
-              executionResult = `Ошибка выполнения: ${e.message}`;
-              console.error(`[Service] ❌ Tool execution error for ${call.name}:`, e);
-            }
-          }
-        }
-
-        toolLogs.push({
-          name: call.name,
-          args: call.args,
-          result: executionResult,
-          iteration: iteration
-        });
-
-        toolResponseParts.push({
-          functionResponse: {
-            name: call.name,
-            id: call.id,
-            response: { result: executionResult }
-          }
-        });
-      }
+      // Выполняем инструменты используя вынесенную функцию
+      const executionResult = executeToolCalls(toolCalls, workingState, enabledTools, iteration);
+      workingState = executionResult.newState;
+      toolLogs.push(...executionResult.logs);
+      const toolResponseParts = executionResult.responseParts;
 
       // Добавляем ответ ассистента и результаты инструментов в историю
       conversationHistory.push(assistantContent);
@@ -529,54 +651,13 @@ ${JSON.stringify(normalizedState, null, 2)}${historySection}`;
     if (lastCandidates && lastCandidates.length > 0) {
       const lastContent = lastCandidates[0].content;
       
-      // Обрабатываем оставшиеся tool calls
+      // Обрабатываем оставшиеся tool calls используя вынесенную функцию
       const remainingToolCalls = lastContent.parts?.filter(p => p.functionCall).map(p => p.functionCall) || [];
       if (remainingToolCalls.length > 0) {
-        const toolResponseParts: Part[] = [];
-        
-        for (const call of remainingToolCalls) {
-          if (!call) continue;
-          
-          const tool = enabledTools.find(t => t.definition.name === call.name);
-          let executionResult = "Ошибка: Инструмент не найден или отключен.";
-          
-          if (tool) {
-            // Валидация обязательных аргументов
-            const requiredParams = tool.definition.parameters?.required || [];
-            const missingParams = requiredParams.filter(param => 
-              call.args?.[param] === undefined || call.args?.[param] === null || call.args?.[param] === ''
-            );
-            
-            if (missingParams.length > 0) {
-              executionResult = `Ошибка валидации: отсутствуют обязательные параметры: ${missingParams.join(', ')}`;
-              console.warn(`[Service] ⚠️ Validation failed for ${call.name}:`, missingParams);
-            } else {
-              try {
-                const execution = tool.apply(workingState, call.args);
-                workingState = execution.newState;
-                executionResult = execution.result;
-              } catch (e: any) {
-                executionResult = `Ошибка выполнения: ${e.message}`;
-                console.error(`[Service] ❌ Tool execution error for ${call.name}:`, e);
-              }
-            }
-          }
-
-          toolLogs.push({
-            name: call.name,
-            args: call.args,
-            result: executionResult,
-            iteration: iteration // Последняя итерация
-          });
-
-          toolResponseParts.push({
-            functionResponse: {
-              name: call.name,
-              id: call.id,
-              response: { result: executionResult }
-            }
-          });
-        }
+        const executionResult = executeToolCalls(remainingToolCalls, workingState, enabledTools, iteration);
+        workingState = executionResult.newState;
+        toolLogs.push(...executionResult.logs);
+        const toolResponseParts = executionResult.responseParts;
         
         conversationHistory.push(lastContent);
         conversationHistory.push({ role: 'user', parts: toolResponseParts });

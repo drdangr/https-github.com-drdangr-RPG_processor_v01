@@ -61,9 +61,9 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764693090407",
     "name": "Сундук",
-    "connectionId": "loc_001",
+    "connectionId": "loc_1764698263182",
     "attributes": {
-      "condition": "заперт ",
+      "condition": "открыт и пуст, ключ вошел в замок и повернулся",
       "feature": "имеет отверстие для ключа"
     }
   },
@@ -82,7 +82,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764714563883",
     "name": "Книга полезных заклинаний",
-    "connectionId": "obj_1764693090407",
+    "connectionId": "char_001",
     "attributes": {
       "type": "сборник полезных заклинаний на все случаи жизни",
       "title": "Заклининания для Dummy"
@@ -122,14 +122,6 @@ export const INITIAL_OBJECTS: ObjectData[] = [
     "connectionId": "obj_1764817473286",
     "attributes": {
       "condition": "потертый, но крепкий"
-    }
-  },
-  {
-    "id": "obj_1764789648713",
-    "name": "Ключ от от сундука",
-    "connectionId": "char_1764641742185",
-    "attributes": {
-      "position": "болтается на тонкой веревочке на шее у Пью"
     }
   },
   {
@@ -211,6 +203,35 @@ export const INITIAL_OBJECTS: ObjectData[] = [
       "condition": "старый, но крепкий",
       "material": "кожаный",
       "color": "черный"
+    }
+  },
+  {
+    "id": "obj_1764885215407",
+    "name": "Ключ от сундука",
+    "connectionId": "char_001",
+    "attributes": {
+      "purpose": "открывает сундук"
+    }
+  },
+  {
+    "id": "obj_1764885626723_s7kz",
+    "name": "Тяжелый булыжник",
+    "connectionId": "loc_001",
+    "attributes": {
+      "size": "достаточно большой, чтобы разбить стекло",
+      "condition": "мокрый и скользкий",
+      "material": "мостовой камень"
+    }
+  },
+  {
+    "id": "obj_1765226868425_9dgy",
+    "name": "Осколки стекла",
+    "connectionId": "loc_002",
+    "attributes": {
+      "condition": "острые и опасные",
+      "size": "множество мелких и крупных фрагментов",
+      "material": "толстое бронированное стекло",
+      "feature": "отражают неоновый свет, делая их заметными"
     }
   }
 ];
