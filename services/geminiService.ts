@@ -431,23 +431,27 @@ export const processGameTurn = async (
       let promptSource: string;
       
       if (isFinalNarrative) {
-        // Для нарратива: используем override если задан, иначе fallback на DEFAULT_NARRATIVE_PROMPT
-        if (settings.narrativePromptOverride !== undefined && settings.narrativePromptOverride !== null) {
+        // Для нарратива: используем override если задан и не пустой, иначе fallback на DEFAULT_NARRATIVE_PROMPT
+        if (settings.narrativePromptOverride !== undefined && 
+            settings.narrativePromptOverride !== null && 
+            settings.narrativePromptOverride.trim() !== '') {
           basePrompt = settings.narrativePromptOverride;
-          promptSource = basePrompt === '' ? 'narrativePromptOverride (empty)' : 'narrativePromptOverride (custom)';
+          promptSource = 'narrativePromptOverride (custom)';
         } else {
-          // Fallback на DEFAULT_NARRATIVE_PROMPT если override не задан
+          // Fallback на DEFAULT_NARRATIVE_PROMPT если override не задан или пустой
           basePrompt = DEFAULT_NARRATIVE_PROMPT;
           promptSource = 'DEFAULT_NARRATIVE_PROMPT (fallback)';
         }
         console.log(`[Service] 🎭 Using narrative prompt: ${promptSource}`);
       } else {
-        // Для симуляции: используем override если задан, иначе fallback на DEFAULT_SYSTEM_PROMPT
-        if (settings.systemPromptOverride !== undefined && settings.systemPromptOverride !== null) {
+        // Для симуляции: используем override если задан и не пустой, иначе fallback на DEFAULT_SYSTEM_PROMPT
+        if (settings.systemPromptOverride !== undefined && 
+            settings.systemPromptOverride !== null && 
+            settings.systemPromptOverride.trim() !== '') {
           basePrompt = settings.systemPromptOverride;
-          promptSource = basePrompt === '' ? 'systemPromptOverride (empty)' : 'systemPromptOverride (custom)';
+          promptSource = 'systemPromptOverride (custom)';
         } else {
-          // Fallback на DEFAULT_SYSTEM_PROMPT если override не задан
+          // Fallback на DEFAULT_SYSTEM_PROMPT если override не задан или пустой
           basePrompt = DEFAULT_SYSTEM_PROMPT;
           promptSource = 'DEFAULT_SYSTEM_PROMPT (fallback)';
         }

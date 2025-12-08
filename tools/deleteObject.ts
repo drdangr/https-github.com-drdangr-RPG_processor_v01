@@ -1,6 +1,6 @@
 import { GameTool, GameState } from '../types';
 import { Type } from "@google/genai";
-import { cloneState } from '../utils/gameUtils';
+import { cloneState, getAllDescendants, findRootLocationOrPlayer } from '../utils/gameUtils';
 
 const tool: GameTool = {
   definition: {
@@ -42,15 +42,51 @@ const tool: GameTool = {
     
     const objectToDelete = clonedState.objects[objectIndex];
     const objectName = objectToDelete.name;
-    const parentConnectionId = objectToDelete.connectionId;
     
-    // Найти все вложенные объекты (объекты, у которых connectionId === objectId)
-    const nestedObjects = clonedState.objects.filter(o => o.connectionId === objectId);
+    // Определяем, куда переместить потомков
+    let targetConnectionId: string | undefined;
     
-    // Переместить вложенные объекты к родителю удаляемого объекта
-    for (const nested of nestedObjects) {
-      nested.connectionId = parentConnectionId;
+    if (objectToDelete.connectionId && objectToDelete.connectionId.trim() !== '') {
+      // У удаляемого объекта есть родитель
+      const parentConnectionId = objectToDelete.connectionId;
+      
+      // Проверяем, является ли родитель локацией или игроком
+      const isLocation = clonedState.locations.some(l => l.id === parentConnectionId);
+      const isPlayer = clonedState.players.some(p => p.id === parentConnectionId);
+      
+      if (isLocation || isPlayer) {
+        // Родитель - локация или игрок, потомки переходят туда
+        targetConnectionId = parentConnectionId;
+      } else {
+        // Родитель - другой объект, потомки переходят к нему
+        targetConnectionId = parentConnectionId;
+      }
+    } else {
+      // У удаляемого объекта нет родителя - ищем корневую локацию/игрока по цепочке вверх
+      const rootLocationOrPlayer = findRootLocationOrPlayer(
+        objectId, 
+        clonedState.objects, 
+        clonedState.locations, 
+        clonedState.players
+      );
+      targetConnectionId = rootLocationOrPlayer || undefined;
     }
+    
+    // Находим только ПРЯМЫХ потомков (не рекурсивно!)
+    // Это объекты, у которых connectionId === objectId
+    const directChildren = clonedState.objects.filter(o => o.connectionId === objectId);
+    
+    // Перемещаем только прямых потомков к найденной цели
+    // Вложенные потомки остаются на своих местах (их connectionId указывает на прямых потомков)
+    for (const directChild of directChildren) {
+      const childIndex = clonedState.objects.findIndex(o => o.id === directChild.id);
+      if (childIndex !== -1) {
+        clonedState.objects[childIndex].connectionId = targetConnectionId;
+      }
+    }
+    
+    // Для информативного сообщения находим всех потомков рекурсивно
+    const allDescendants = getAllDescendants(objectId, clonedState.objects);
     
     // Удалить объект из массива
     clonedState.objects.splice(objectIndex, 1);
@@ -58,13 +94,13 @@ const tool: GameTool = {
     // Формируем информативное сообщение
     let result = `Объект "${objectName}" удалён`;
     
-    if (nestedObjects.length > 0) {
-      const nestedNames = nestedObjects.map(o => `"${o.name}"`).join(', ');
+    if (allDescendants.length > 0) {
+      const nestedNames = allDescendants.map(o => `"${o.name}"`).join(', ');
       
       // Определяем, куда переместились вложенные объекты
-      const targetPlayer = clonedState.players.find(p => p.id === parentConnectionId);
-      const targetLocation = clonedState.locations.find(l => l.id === parentConnectionId);
-      const targetObject = clonedState.objects.find(o => o.id === parentConnectionId);
+      const targetPlayer = targetConnectionId ? clonedState.players.find(p => p.id === targetConnectionId) : null;
+      const targetLocation = targetConnectionId ? clonedState.locations.find(l => l.id === targetConnectionId) : null;
+      const targetObject = targetConnectionId ? clonedState.objects.find(o => o.id === targetConnectionId) : null;
       
       let locationInfo = "";
       if (targetPlayer) {
@@ -73,11 +109,13 @@ const tool: GameTool = {
         locationInfo = `в локацию "${targetLocation.name}"`;
       } else if (targetObject) {
         locationInfo = `в объект "${targetObject.name}"`;
+      } else if (targetConnectionId) {
+        locationInfo = `в "${targetConnectionId}"`;
       } else {
-        locationInfo = `в "${parentConnectionId}"`;
+        locationInfo = `без связи (в корень)`;
       }
       
-      result += `. Вложенные объекты (${nestedObjects.length}) перемещены ${locationInfo}: ${nestedNames}`;
+      result += `. Все вложенные объекты (${allDescendants.length}) перемещены ${locationInfo}: ${nestedNames}`;
     }
     
     return { 

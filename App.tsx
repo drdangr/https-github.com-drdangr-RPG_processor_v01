@@ -547,6 +547,8 @@ const App: React.FC = () => {
                   ...gameState.locations.map(l => ({ id: l.id, name: l.name, type: 'location' as const })),
                   ...gameState.objects.map(o => ({ id: o.id, name: o.name, type: 'object' as const }))
                 ]}
+                locations={gameState.locations}
+                players={gameState.players}
               />
             )}
             {activeTab === 'history' && (

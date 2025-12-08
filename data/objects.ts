@@ -233,5 +233,29 @@ export const INITIAL_OBJECTS: ObjectData[] = [
       "material": "толстое бронированное стекло",
       "feature": "отражают неоновый свет, делая их заметными"
     }
+  },
+  {
+    "id": "obj_1765231965105",
+    "name": "Большая матрешка",
+    "connectionId": "obj_1764817473286",
+    "attributes": {}
+  },
+  {
+    "id": "obj_1765232039723",
+    "name": "Средняя матрешка",
+    "connectionId": "obj_1765231965105",
+    "attributes": {}
+  },
+  {
+    "id": "obj_1765232068204",
+    "name": "левая половинка малой матрешки",
+    "connectionId": "obj_1765232039723",
+    "attributes": {}
+  },
+  {
+    "id": "obj_1765232109047",
+    "name": "Правая половинка малой матрешки",
+    "connectionId": "obj_1765232039723",
+    "attributes": {}
   }
 ];
