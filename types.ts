@@ -32,9 +32,9 @@ export interface PlayerData {
 export interface ObjectData {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   connectionId: string; // ID of Player, Location, or other Object
-  state: string; // e.g., "broken", "working"
+  state?: string; // e.g., "broken", "working"
   attributes?: Record<string, string>;
 }
 

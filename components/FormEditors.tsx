@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { WorldData, LocationData, PlayerData, ObjectData } from '../types';
+import { deleteObjectWithChildren } from '../utils/gameUtils';
 
 // --- UI Primitives ---
 
@@ -532,7 +533,9 @@ export const ObjectsEditor: React.FC<{
   onChange: (d: ObjectData[]) => void;
   onSave?: () => void;
   connectionTargets?: ConnectionTarget[];
-}> = ({ data, onChange, onSave, connectionTargets = [] }) => {
+  locations?: LocationData[];
+  players?: PlayerData[];
+}> = ({ data, onChange, onSave, connectionTargets = [], locations = [], players = [] }) => {
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
 
   // Создаем карту всех connectionTargets для быстрого поиска названий
@@ -554,13 +557,17 @@ export const ObjectsEditor: React.FC<{
       if (target && (target.type === 'location' || target.type === 'player')) {
         // Это корневой объект (подключен к локации или игроку)
         rootObjects.push(obj);
-      } else {
-        // Это вложенный объект (подключен к другому объекту)
+      } else if (target && target.type === 'object') {
+        // Это вложенный объект (подключен к другому объекту, который существует)
         const parentId = obj.connectionId;
         if (!objectsByParent.has(parentId)) {
           objectsByParent.set(parentId, []);
         }
         objectsByParent.get(parentId)!.push(obj);
+      } else {
+        // connectionId установлен, но target не найден (объект/локация/игрок удалён)
+        // Обрабатываем такой объект как объект без связи
+        ungroupedObjects.push(obj);
       }
     }
   });
@@ -724,9 +731,19 @@ export const ObjectsEditor: React.FC<{
     const children = getChildren(item.id);
     const sortedChildren = sortObjects(children);
 
+    // Функция для корректного удаления объекта с обработкой вложенных объектов
+    const handleDelete = () => {
+      // NOTE: deleteObjectWithChildren is imported from '../utils/gameUtils' at the top of the file
+      // Make sure it is available. If not, we might need to check imports.
+      // Based on file read, it was imported on line 3.
+      const newObjects = deleteObjectWithChildren(data, item.id, locations, players);
+      onChange(newObjects);
+      if (onSave) onSave();
+    };
+
     return (
       <div key={item.id} className={depth > 0 ? `ml-4 border-l-2 border-gray-700 pl-2` : ''}>
-        <ListItem id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== originalIndex))}>
+        <ListItem id={item.id} name={item.name} onDelete={handleDelete}>
           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
@@ -737,6 +754,7 @@ export const ObjectsEditor: React.FC<{
             options={hierarchyOptions.filter(opt => opt.id !== item.id)}
             placeholder="Выберите владельца/контейнер..."
           />
+
         </ListItem>
         {/* Рекурсивно рендерим дочерние объекты */}
         {sortedChildren.length > 0 && (
