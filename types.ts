@@ -1,4 +1,17 @@
-import { FunctionDeclaration } from "@google/genai";
+import { FunctionDeclaration, Content, Part } from "@google/genai";
+
+export interface GeminiApiResponse {
+  candidates?: Array<{
+    content?: Content;
+    finishReason?: string;
+    // Add other candidate fields if needed
+  }>;
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
+}
 
 export interface WorldData {
   worldDescription: string;
@@ -49,12 +62,24 @@ export interface ToolCallLog {
   name: string;
   args: any;
   result: string;
+  iteration?: number;
 }
 
 export interface SimulationResult {
   narrative: string;
   toolLogs: ToolCallLog[];
   newState: GameState;
+  thinking?: string;
+  simulationThinking?: string;
+  narrativeThinking?: string;
+  tokenUsage?: {
+    simulation: TokenUsage;
+    narrative: TokenUsage | null;
+    total: TokenUsage;
+  };
+  costInfo?: CostInfo;
+  simulationDebugInfo?: any;
+  narrativeDebugInfo?: any;
 }
 
 // Modular Tool Definition
@@ -113,6 +138,7 @@ export interface CostInfo {
   inputCost: number;
   outputCost: number;
   totalCost: number;
+  model?: string;
 }
 
 // Turn History

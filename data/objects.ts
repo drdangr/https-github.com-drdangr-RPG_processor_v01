@@ -280,5 +280,13 @@ export const INITIAL_OBJECTS: ObjectData[] = [
       "appearance": "не расписана, просто деревянная",
       "feature": "цельная, не открывается"
     }
+  },
+  {
+    "id": "obj_1765260119855",
+    "name": "Полки с книгами",
+    "connectionId": "",
+    "attributes": {
+      "description": "нексолько полок, плотно уставленных самой разнообразной литературой"
+    }
   }
 ];

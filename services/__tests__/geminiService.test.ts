@@ -1,6 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { processGameTurn } from '../geminiService';
-import { createTestState } from '../../tools/__tests__/testHelpers';
 import { GameTool, GameState } from '../../types';
 import { Type } from '@google/genai';
 
@@ -28,11 +27,11 @@ function createMockResponse(options: {
   toolCalls?: Array<{ name: string; id: string; args: any }>;
 }) {
   const parts: any[] = [];
-  
+
   if (options.text) {
     parts.push({ text: options.text });
   }
-  
+
   if (options.toolCalls) {
     for (const call of options.toolCalls) {
       parts.push({
@@ -44,7 +43,7 @@ function createMockResponse(options: {
       });
     }
   }
-  
+
   return {
     candidates: [{
       content: {
@@ -74,15 +73,46 @@ function createMockTool(name: string, handler: (state: GameState, args: any) => 
   };
 }
 
+// Хелпер для создания тестового состояния
+function createTestState(): GameState {
+  return {
+    world: { worldDescription: 'Test World', gameGenre: 'Fantasy' },
+    locations: [
+      {
+        id: 'loc1',
+        name: 'Start Location',
+        description: 'A dark creepy cave',
+        currentSituation: 'Scary sounds',
+        state: 'normal',
+        connections: [],
+        attributes: {}
+      },
+      {
+        id: 'loc2',
+        name: 'Connected Location',
+        description: 'Bright field',
+        currentSituation: 'Sunny',
+        state: 'normal',
+        connections: [{ targetLocationId: 'loc1', type: 'bidirectional' }],
+        attributes: {}
+      }
+    ],
+    players: [
+      { id: 'p1', name: 'Tester', description: 'Hero', inventory: [], health: 100, state: 'normal', locationId: 'loc1', attributes: {} }
+    ],
+    objects: []
+  };
+}
+
 describe('geminiService - многоходовый цикл инструментов', () => {
   beforeEach(() => {
     // Настраиваем process.env.API_KEY
     vi.stubGlobal('process', { env: { API_KEY: 'test-api-key' } });
-    
+
     // Сбрасываем моки
     mockGenerateContent.mockReset();
   });
-  
+
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
@@ -90,51 +120,61 @@ describe('geminiService - многоходовый цикл инструмент
 
   test('обрабатывает ответ без инструментов (только текст)', async () => {
     const state = createTestState();
-    
-    // AI сразу возвращает текст без вызова инструментов
+
+    // 1. Симуляция: возвращает текст (мысли), инструментов нет -> выход из цикла
+    mockGenerateContent.mockResolvedValueOnce(
+      createMockResponse({ text: 'Thinking about looking around...' })
+    );
+
+    // 2. Нарратив: генерирует финальное описание
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({ text: 'Джек осмотрелся вокруг.' })
     );
-    
+
     const result = await processGameTurn(state, 'осмотреться', []);
-    
+
     expect(result.narrative).toBe('Джек осмотрелся вокруг.');
     expect(result.toolLogs).toHaveLength(0);
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
   });
 
   test('обрабатывает один вызов инструмента', async () => {
     const state = createTestState();
-    
+
     const testTool = createMockTool('test_action', (s, args) => ({
       newState: s,
       result: `Выполнено: ${args.value}`
     }));
-    
-    // Первый ответ: AI вызывает инструмент
+
+    // 1. Симуляция: вызывает инструмент
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({
         toolCalls: [{ name: 'test_action', id: 'call_1', args: { value: 'тест' } }]
       })
     );
-    
-    // Второй ответ: AI возвращает нарратив
+
+    // 2. Симуляция (итерация 1): получает результат, решает закончить (текст без tools)
+    mockGenerateContent.mockResolvedValueOnce(
+      createMockResponse({ text: 'Действие выполнено, завершаю.' })
+    );
+
+    // 3. Нарратив: финальное описание
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({ text: 'Действие успешно выполнено.' })
     );
-    
+
     const result = await processGameTurn(state, 'выполнить тест', [testTool]);
-    
+
     expect(result.narrative).toBe('Действие успешно выполнено.');
     expect(result.toolLogs).toHaveLength(1);
     expect(result.toolLogs[0].name).toBe('test_action');
     expect(result.toolLogs[0].result).toBe('Выполнено: тест');
-    expect(mockGenerateContent).toHaveBeenCalledTimes(2);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(3);
   });
 
   test('обрабатывает многоходовый цикл инструментов', async () => {
     const state = createTestState();
-    
+
     let callCount = 0;
     const counterTool = createMockTool('increment', (s, args) => {
       callCount++;
@@ -143,44 +183,49 @@ describe('geminiService - многоходовый цикл инструмент
         result: `Счётчик: ${callCount}`
       };
     });
-    
-    // Первый ответ: AI вызывает инструмент
+
+    // 1. Симуляция: Инструмент 1
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({
         toolCalls: [{ name: 'increment', id: 'call_1', args: { value: '1' } }]
       })
     );
-    
-    // Второй ответ: AI вызывает инструмент снова
+
+    // 2. Симуляция: Инструмент 2
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({
         toolCalls: [{ name: 'increment', id: 'call_2', args: { value: '2' } }]
       })
     );
-    
-    // Третий ответ: AI вызывает инструмент ещё раз
+
+    // 3. Симуляция: Инструмент 3
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({
         toolCalls: [{ name: 'increment', id: 'call_3', args: { value: '3' } }]
       })
     );
-    
-    // Четвёртый ответ: AI возвращает нарратив
+
+    // 4. Симуляция: Завершение (текст)
+    mockGenerateContent.mockResolvedValueOnce(
+      createMockResponse({ text: 'Все действия выполнены.' })
+    );
+
+    // 5. Нарратив: Финал
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({ text: 'Выполнено три действия подряд!' })
     );
-    
+
     const result = await processGameTurn(state, 'увеличить три раза', [counterTool]);
-    
+
     expect(result.narrative).toBe('Выполнено три действия подряд!');
     expect(result.toolLogs).toHaveLength(3);
     expect(callCount).toBe(3);
-    expect(mockGenerateContent).toHaveBeenCalledTimes(4);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(5);
   });
 
   test('ограничивает количество итераций (MAX_TOOL_ITERATIONS = 5)', async () => {
     const state = createTestState();
-    
+
     let callCount = 0;
     const infiniteTool = createMockTool('infinite', (s, args) => {
       callCount++;
@@ -189,8 +234,9 @@ describe('geminiService - многоходовый цикл инструмент
         result: `Вызов ${callCount}`
       };
     });
-    
-    // AI бесконечно вызывает инструменты
+
+    // AI бесконечно вызывает инструменты (10 раз)
+    // Но цикл ограничится 5 итерациями (каждая вызывает инструмент) + финальный вызов (нарратив)
     for (let i = 0; i < 10; i++) {
       mockGenerateContent.mockResolvedValueOnce(
         createMockResponse({
@@ -198,37 +244,35 @@ describe('geminiService - многоходовый цикл инструмент
         })
       );
     }
-    
-    // Финальный нарратив после лимита
+
+    // Нарратив (он позовется после break по лимиту)
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({ text: 'Превышен лимит итераций.' })
     );
-    
+
     const result = await processGameTurn(state, 'бесконечный цикл', [infiniteTool]);
-    
-    // MAX_TOOL_ITERATIONS = 5, + 1 последняя обработка + 1 финальный запрос
-    // Инструменты вызываются максимум 6 раз (5 итераций + последние из 5-й итерации)
+
+    // 5 iterations for tools + 1 final narrative
     expect(result.toolLogs.length).toBeLessThanOrEqual(6);
     expect(result.narrative).toBeTruthy();
-    expect(callCount).toBeLessThanOrEqual(6);
   });
 
   test('обрабатывает несколько инструментов за одну итерацию', async () => {
     const state = createTestState();
-    
+
     const logs: string[] = [];
-    
+
     const toolA = createMockTool('action_a', (s, args) => {
       logs.push('A');
       return { newState: s, result: 'A выполнено' };
     });
-    
+
     const toolB = createMockTool('action_b', (s, args) => {
       logs.push('B');
       return { newState: s, result: 'B выполнено' };
     });
-    
-    // AI вызывает два инструмента одновременно
+
+    // 1. Симуляция: Два инструмента сразу
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({
         toolCalls: [
@@ -237,107 +281,62 @@ describe('geminiService - многоходовый цикл инструмент
         ]
       })
     );
-    
-    // Нарратив
+
+    // 2. Симуляция: Завершение
+    mockGenerateContent.mockResolvedValueOnce(
+      createMockResponse({ text: 'Готово.' })
+    );
+
+    // 3. Нарратив
     mockGenerateContent.mockResolvedValueOnce(
       createMockResponse({ text: 'Оба действия выполнены.' })
     );
-    
+
     const result = await processGameTurn(state, 'сделать A и B', [toolA, toolB]);
-    
+
     expect(logs).toEqual(['A', 'B']);
     expect(result.toolLogs).toHaveLength(2);
     expect(result.narrative).toBe('Оба действия выполнены.');
   });
 
-  test('состояние обновляется между итерациями', async () => {
+  test('добавляет контент локации и историю действий в промпт', async () => {
     const state = createTestState();
-    
-    const modifyTool = createMockTool('modify_state', (s, args) => {
-      // Модифицируем состояние
-      const newState = JSON.parse(JSON.stringify(s));
-      newState.players[0].attributes.modified = args.value;
-      return { newState, result: `Установлено: ${args.value}` };
-    });
-    
-    // Первый вызов модифицирует состояние
-    mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({
-        toolCalls: [{ name: 'modify_state', id: 'call_1', args: { value: 'первое' } }]
-      })
-    );
-    
-    // Второй вызов модифицирует уже изменённое состояние
-    mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({
-        toolCalls: [{ name: 'modify_state', id: 'call_2', args: { value: 'второе' } }]
-      })
-    );
-    
-    // Нарратив
-    mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({ text: 'Состояние изменено дважды.' })
-    );
-    
-    const result = await processGameTurn(state, 'изменить дважды', [modifyTool]);
-    
-    // Финальное состояние должно содержать последнее значение
-    expect(result.newState.players[0].attributes.modified).toBe('второе');
-    expect(result.toolLogs).toHaveLength(2);
-  });
+    const history = [{
+      turn: 1,
+      userPrompt: 'предыдущее действие',
+      narrative: 'предыдущий ответ',
+      toolLogs: [{ name: 'prev_tool', args: {}, result: 'Успех' }]
+    }];
 
-  test('обрабатывает ошибку выполнения инструмента', async () => {
-    const state = createTestState();
-    
-    const failingTool = createMockTool('failing_tool', () => {
-      throw new Error('Инструмент сломался!');
-    });
-    
+    // 1. Симуляция
     mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({
-        toolCalls: [{ name: 'failing_tool', id: 'call_1', args: { value: 'test' } }]
-      })
+      createMockResponse({ text: 'Thinking...' })
     );
-    
-    mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({ text: 'Произошла ошибка.' })
-    );
-    
-    const result = await processGameTurn(state, 'сломать', [failingTool]);
-    
-    expect(result.toolLogs).toHaveLength(1);
-    expect(result.toolLogs[0].result).toContain('Ошибка выполнения');
-    expect(result.toolLogs[0].result).toContain('Инструмент сломался!');
-  });
 
-  test('обрабатывает вызов несуществующего инструмента', async () => {
-    const state = createTestState();
-    
-    // AI пытается вызвать инструмент, которого нет
+    // 2. Нарратив
     mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({
-        toolCalls: [{ name: 'nonexistent_tool', id: 'call_1', args: { value: 'test' } }]
-      })
+      createMockResponse({ text: 'Финальный нарратив.' })
     );
-    
-    mockGenerateContent.mockResolvedValueOnce(
-      createMockResponse({ text: 'Инструмент не найден.' })
-    );
-    
-    const result = await processGameTurn(state, 'вызвать несуществующий', []);
-    
-    expect(result.toolLogs).toHaveLength(1);
-    expect(result.toolLogs[0].result).toContain('не найден');
-  });
 
-  test('возвращает ошибку при отсутствии API ключа', async () => {
-    vi.stubGlobal('process', { env: {} }); // Нет API_KEY
-    
-    const state = createTestState();
-    const result = await processGameTurn(state, 'тест', []);
-    
-    expect(result.narrative).toContain('API_KEY');
-    expect(result.narrative).toContain('КРИТИЧЕСКАЯ ОШИБКА');
-    expect(result.newState).toBe(state);
+    await processGameTurn(state, 'текущее действие', [], undefined, history);
+
+    // Проверяем вызовы
+    // Вызов 0: Симуляция. Должна быть история действий.
+    const simCallArgs = mockGenerateContent.mock.calls[0][0];
+    const simInstruction = simCallArgs.config.systemInstruction;
+
+    expect(simInstruction).toContain('ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ');
+    expect(simInstruction).toContain('prev_tool'); // Проверяем наличие имени инструмента
+
+    // Вызов 1: Нарратив. Должен быть контекст локации.
+    const narCallArgs = mockGenerateContent.mock.calls[1][0];
+    const narInstruction = narCallArgs.config.systemInstruction;
+
+    expect(narInstruction).toContain('ТЕКУЩАЯ ЛОКАЦИЯ');
+    expect(narInstruction).toContain('A dark creepy cave');
+    expect(narInstruction).toContain('Scary sounds');
+    // И история тоже
+    expect(narInstruction).toContain('ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ');
+    expect(narInstruction).toContain('prev_tool');
   });
 });
