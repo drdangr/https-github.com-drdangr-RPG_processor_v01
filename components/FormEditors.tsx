@@ -536,6 +536,8 @@ export const ObjectsEditor: React.FC<{
   locations?: LocationData[];
   players?: PlayerData[];
 }> = ({ data, onChange, onSave, connectionTargets = [], locations = [], players = [] }) => {
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
 
   // Создаем карту всех connectionTargets для быстрого поиска названий
@@ -725,6 +727,27 @@ export const ObjectsEditor: React.FC<{
 
   addGroup('📦 Unconnected', unconnectedObjects);
 
+  const handleDrop = (draggedId: string, targetId: string) => {
+    setDragOverId(null);
+    if (!draggedId || draggedId === targetId) return;
+
+    // Check for circular dependency:
+    // If targetId is a descendant of draggedId (i.e., draggedId is in the path of targetId), abort.
+    const targetHierarchy = getHierarchyInfo(targetId);
+    if (targetHierarchy.path.some(p => p.id === draggedId)) {
+      alert("Cannot drop an object into its own child!");
+      return;
+    }
+
+    const newObjects = [...data];
+    const index = newObjects.findIndex(o => o.id === draggedId);
+    if (index !== -1) {
+      newObjects[index] = { ...newObjects[index], connectionId: targetId };
+      onChange(newObjects);
+      if (onSave) onSave();
+    }
+  };
+
   // Рекурсивная функция для рендеринга объекта и его вложенных объектов
   const renderObjectWithChildren = (item: ObjectData, depth: number = 0) => {
     const originalIndex = data.findIndex(obj => obj.id === item.id);
@@ -741,8 +764,34 @@ export const ObjectsEditor: React.FC<{
       if (onSave) onSave();
     };
 
+    const isDragOver = dragOverId === item.id;
+
     return (
-      <div key={item.id} className={depth > 0 ? `ml-4 border-l-2 border-gray-700 pl-2` : ''}>
+      <div
+        key={item.id}
+        className={`${depth > 0 ? `ml-4 border-l-2 ${isDragOver ? 'border-purple-500 bg-purple-900/20' : 'border-gray-700'} pl-2` : isDragOver ? 'bg-purple-900/20 rounded' : ''} transition-colors duration-200`}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', item.id);
+          e.stopPropagation();
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOverId(item.id);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (dragOverId === item.id) setDragOverId(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const draggedId = e.dataTransfer.getData('text/plain');
+          handleDrop(draggedId, item.id);
+        }}
+      >
         <ListItem id={item.id} name={item.name} onDelete={handleDelete}>
           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
@@ -786,14 +835,30 @@ export const ObjectsEditor: React.FC<{
         )}
 
         {/* Группы по Connected To */}
-        {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => (
-          <div key={connectionId} className="mb-4">
-            <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2 px-1">
-              {icon} {connectionName}
+        {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => {
+          const isGroupDragOver = dragOverId === connectionId;
+          return (
+            <div
+              key={connectionId}
+              className={`mb-4 rounded p-1 transition-colors ${isGroupDragOver ? 'bg-purple-900/30 ring-2 ring-purple-500/50' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverId(connectionId);
+              }}
+              onDragLeave={() => setDragOverId(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                const draggedId = e.dataTransfer.getData('text/plain');
+                handleDrop(draggedId, connectionId);
+              }}
+            >
+              <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2 px-1 pointer-events-none">
+                {icon} {connectionName}
+              </div>
+              {objects.map(obj => renderObjectWithChildren(obj, 0))}
             </div>
-            {objects.map(obj => renderObjectWithChildren(obj, 0))}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

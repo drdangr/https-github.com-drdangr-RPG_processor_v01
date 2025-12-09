@@ -82,7 +82,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764714563883",
     "name": "Книга полезных заклинаний",
-    "connectionId": "char_001",
+    "connectionId": "obj_1764816249204",
     "attributes": {
       "type": "сборник полезных заклинаний на все случаи жизни",
       "title": "Заклининания для Dummy"
