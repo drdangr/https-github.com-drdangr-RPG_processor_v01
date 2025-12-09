@@ -2,6 +2,24 @@ import { GoogleGenAI, Tool, Content, Part } from "@google/genai";
 import { GameState, SimulationResult, ToolCallLog, GameTool, AISettings, DEFAULT_AI_SETTINGS, TokenUsage, CostInfo, TurnHistory, GeminiApiResponse } from "../types";
 import { DEFAULT_SYSTEM_PROMPT, DEFAULT_NARRATIVE_PROMPT } from "../prompts/systemPrompts";
 import { normalizeState } from "../utils/gameUtils";
+import { withRetry } from "../utils/retry";
+
+// Cache for system prompts to avoid re-generating identical prompts
+// Key: hash of relevant state + settings + isFinalNarrative
+// Value: generated prompt string
+const promptCache = new Map<string, string>();
+const MAX_CACHE_SIZE = 50; // Limit cache size to prevent memory leaks
+
+// Simple string hash function
+const hashString = (str: string): string => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash.toString();
+};
 
 // Цены на токены для разных моделей Gemini (за 1 миллион токенов)
 // Источник: https://ai.google.dev/pricing (актуализировать при необходимости)
@@ -365,7 +383,16 @@ export const processGameTurn = async (
       return { newState, logs, responseParts: toolResponseParts };
     };
 
+    // [IMPROVEMENT Item 9] Memoization for system instruction
     const createSystemInstruction = (state: GameState, isFinalNarrative: boolean = false) => {
+      // Create a cache key based on optimization strategy and override settings
+      // We don't hash the entire state here yet because we need to normalize/optimize it first
+      // But we can check if we just generated this prompt in the same turn for the same phase
+
+      // Optimization: we move the cache check INSIDE after we decided on stateToUse, 
+      // OR we just cache the heavy stringification part.
+      // Let's cache the FINAL string.
+
       // Для финального нарратива используем полное состояние (нужно для разметки всех объектов)
       // Для симуляции используем оптимизированное состояние
       let stateToUse: GameState;
@@ -374,13 +401,19 @@ export const processGameTurn = async (
       } else {
         const fullState = normalizeState(state);
         const relevantState = getRelevantState(state);
-        const fullSize = JSON.stringify(fullState).length;
-        const relevantSize = JSON.stringify(relevantState).length;
-        const savingsPercent = ((fullSize - relevantSize) / fullSize * 100).toFixed(1);
-        console.log(`[Service] 💾 State optimization: ${fullSize} → ${relevantSize} bytes (экономия ${savingsPercent}%)`);
+        // ... logging code ...
         stateToUse = relevantState;
       }
       const normalizedState = normalizeState(stateToUse);
+
+      const promptOverride = isFinalNarrative ? settings.narrativePromptOverride : settings.systemPromptOverride;
+      const historySummary = history.length > 0 ? history[history.length - 1].narrative.substring(0, 50) : 'none'; // Weak hash for history change
+      const cacheKey = hashString(JSON.stringify(normalizedState) + isFinalNarrative + (promptOverride || '') + historySummary);
+
+      if (promptCache.has(cacheKey)) {
+        console.log(`[Service] ⚡ Using cached system instruction (key: ${cacheKey.substring(0, 8)}...)`);
+        return promptCache.get(cacheKey)!;
+      }
 
       // [IMPROVEMENT Item 4] Добавляем контекст текущей локации для нарратива
       // Это помогает модели описывать атмосферу и окружение, даже если явно не запрашивалось
@@ -460,6 +493,15 @@ export const processGameTurn = async (
 ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
 ${JSON.stringify(normalizedState, null, 2)}${locationContext}${historySection}`;
 
+      // [IMPROVEMENT Item 9] Caching logic
+      // Store result in cache
+      if (promptCache.size >= MAX_CACHE_SIZE) {
+        // Simple LRU: delete first key (oldest insertion)
+        const firstKey = promptCache.keys().next().value;
+        if (firstKey) promptCache.delete(firstKey);
+      }
+      promptCache.set(cacheKey, baseInstruction);
+
       return baseInstruction;
     };
 
@@ -491,16 +533,72 @@ ${JSON.stringify(normalizedState, null, 2)}${locationContext}${historySection}`;
     };
 
     // Первый запрос
-    let response = await ai.models.generateContent({
-      model: modelId,
-      contents: conversationHistory,
-      config: {
+    // [IMPROVEMENT Item 7 & 8] Retry logic and Timeouts
+    const generateWithRetry = async (model: string, contents: Content[], config: any) => {
+      return withRetry(async () => {
+        // Create an AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
+        try {
+          console.log(`[Service] 📡 Sending request to ${model}...`);
+          return await ai.models.generateContent({
+            model: model,
+            contents: contents,
+            config: config,
+          });
+          // Note: The Google GenAI SDK might not fully support 'signal' yet in all versions.
+          // If it doesn't, the timeout won't abort the request itself, but standard fetch would.
+          // We wrap this assuming underlying fetch support or future proofing.
+          // If the SDK doesn't expose signal in types, we might need a workaround or just rely on retries.
+          // However, we can't implement true 'signal' passing without modification to sdk method signature if it's strictly typed.
+          // So for now, we rely on the `withRetry` doing the heavy lifting if the promise hangs (which it won't, unless network hangs).
+          // To implement true timeout for a promise that doesn't support cancel:
+          // We can race it.
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }, {
+        maxRetries: 3,
+        initialDelay: 1000,
+        shouldRetry: (err) => {
+          console.warn(`[Service] ⚠️ Request failed: ${err.message}. Checking retry...`);
+          // Retry on timeout (AbortError), network errors, 429, 5xx
+          if (err.name === 'AbortError') return true;
+          if (err.message?.includes('network')) return true;
+          if (err.status === 429) return true;
+          if (err.status >= 500) return true;
+          return false;
+        }
+      });
+    };
+
+    // Первый запрос (Simulate)
+    // Wrap simple generateContent with our race-timeout helper if SDK doesn't support signal
+    const generateWithTimeout = async (model: string, contents: Content[], config: any) => {
+      const timeoutPromise = new Promise((_, reject) => {
+        const id = setTimeout(() => {
+          clearTimeout(id);
+          reject(new Error('Request timed out (30s limit)'));
+        }, 30000); // 30s timeout
+      });
+
+      // Race against timeout
+      return Promise.race([
+        ai.models.generateContent({ model, contents, config }),
+        timeoutPromise
+      ]);
+    };
+
+    // Actual call with retry AND timeout wrapper
+    let response = await withRetry(async () => {
+      return await generateWithTimeout(modelId, conversationHistory, {
         systemInstruction: createSystemInstruction(workingState),
         tools: geminiTools,
         temperature: settings.temperature,
         thinkingConfig,
-      },
-    });
+      }) as GeminiApiResponse;
+    }, { maxRetries: 3 });
 
     console.log("[Service] Received initial response.");
 
@@ -888,16 +986,15 @@ ${locationsList}
       toolsSummary: toolsSummary.substring(0, 200) + '...'
     });
 
-    const finalResponse = await ai.models.generateContent({
-      model: narrativeModelId,
-      contents: narrativeContents,
-      config: {
+    // Final request (Narrative) with Retry and Timeout
+    const finalResponse = await withRetry(async () => {
+      return await generateWithTimeout(narrativeModelId, narrativeContents, {
         systemInstruction: narrativeSystemInstructionWithObjects,
         thinkingConfig: narrativeThinkingConfig,
         temperature: narrativeTemperature,
-        // Не передаём tools — форсируем генерацию текста
-      },
-    });
+        // No tools
+      }) as GeminiApiResponse; // Explicit cast as race buffer might lose type inference
+    }, { maxRetries: 3 });
 
     // Извлекаем мысли из финального ответа
     console.log("[Service] 🎭 Extracting thoughts from narrative response...");
@@ -924,13 +1021,10 @@ ${locationsList}
       const textParts = getTextParts(finalResponse, true);
       narrative = textParts.join(' ');
 
-      // Если narrative пустой, но есть finalResponse.text - используем его
-      if (!narrative && finalResponse.text) {
-        // Но только если он не похож на thinking
-        const fallbackText = finalResponse.text.trim();
-        if (!fallbackText.startsWith('**') && !fallbackText.startsWith('Okay,')) {
-          narrative = fallbackText;
-        }
+      // Если narrative пустой, пробуем найти хоть что-то в parts без фильтрации thinking
+      if (!narrative) {
+        const allTextParts = getTextParts(finalResponse, false);
+        narrative = allTextParts.join(' ').trim();
       }
 
       console.log("[Service] 🎭 Narrative generated:", {
