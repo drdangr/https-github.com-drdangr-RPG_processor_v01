@@ -5,15 +5,15 @@ import { cloneState } from '../utils/gameUtils';
 const tool: GameTool = {
   definition: {
     name: "move_object",
-    description: "Переместить объект: передать игроку, поместить в локацию или внутрь другого объекта. Может работать как с реальными ID объектов из состояния мира, так и с ID, созданными предыдущими вызовами create_object в этом же ответе модели через ссылки вида $N.createdId (где N — индекс вызова create_object в общем списке вызовов этого ответа, начиная с 0).",
+    description: "Универсальный иструмент для перемещения ОБЪЕКТОВ и ИГРОКОВ. Позволяет поместить сущность (объект или игрока) в локацию, внутрь объекта или передать другому игроку. Работает с иерархией. При перемещении объекта в объект, проверяет отсутствие циклов. Используй этот инструмент, чтобы: положить предмет в ящик, дать предмет игроку, посадить игрока в машину, перенести объект в другую комнату.",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        objectId: { 
-          type: Type.STRING, 
-          description: "Реальный ID объекта из состояния мира (формат: obj_timestamp_suffix) ИЛИ ссылка на результат предыдущего вызова create_object в этом же ответе в формате $N.createdId (где N — индекс вызова create_object в общем списке вызовов этого ответа, начиная с 0). Например: если create_object был вторым вызовом (после move_player), используй $1.createdId. Не выдумывай ID вручную — либо используй реальные ID из GameState, либо ссылки $N.createdId." 
+        objectId: {
+          type: Type.STRING,
+          description: "ID сущности для перемещения (Player ID или Object ID). Можно использовать ссылки $N.createdId."
         },
-        targetId: { type: Type.STRING, description: "ID нового владельца/контейнера (Player ID, Location ID или Object ID)." },
+        targetId: { type: Type.STRING, description: "ID цели (нового родителя): Location ID, Player ID или Object ID." },
       },
       required: ["objectId", "targetId"],
     },
@@ -21,79 +21,82 @@ const tool: GameTool = {
   apply: (state: GameState, args: any) => {
     const newState = cloneState(state);
     const { objectId, targetId } = args;
-    
-    // Проверка на пустые значения
+
     if (!objectId || !targetId) {
-      return { 
-        newState: state, 
-        result: `Ошибка: objectId и targetId не могут быть пустыми` 
-      };
-    }
-    
-    // Найти объект
-    const obj = newState.objects.find(o => o.id === objectId);
-    if (!obj) {
-      return { 
-        newState: state, 
-        result: `Ошибка: Объект "${objectId}" не найден` 
-      };
+      return { newState: state, result: `Ошибка: objectId и targetId не могут быть пустыми` };
     }
 
-    // Проверка на перемещение в себя
+    // 1. Находим сущность (Object или Player)
+    let entity: any = newState.objects.find(o => o.id === objectId);
+    let entityType = 'object';
+
+    if (!entity) {
+      entity = newState.players.find(p => p.id === objectId);
+      entityType = 'player';
+    }
+
+    if (!entity) {
+      return { newState: state, result: `Ошибка: Сущность "${objectId}" не найдена` };
+    }
+
+    // 2. Проверка на перемещение в себя
     if (objectId === targetId) {
-      return { 
-        newState: state, 
-        result: `Ошибка: Объект не может быть перемещён в себя` 
-      };
+      return { newState: state, result: `Ошибка: Нельзя переместить сущность в саму себя` };
     }
 
-    // Определить тип цели и проверить её существование
+    // 3. Находим цель
     const targetLocation = newState.locations.find(l => l.id === targetId);
     const targetPlayer = newState.players.find(p => p.id === targetId);
     const targetObject = newState.objects.find(o => o.id === targetId);
 
     if (!targetLocation && !targetPlayer && !targetObject) {
-      return { 
-        newState: state, 
-        result: `Ошибка: Цель "${targetId}" не найдена (не локация, не игрок, не объект)` 
-      };
+      return { newState: state, result: `Ошибка: Цель "${targetId}" не найдена` };
     }
 
-    // Проверка на циклические зависимости (если цель - объект)
-    if (targetObject) {
-      // Проверяем, не находится ли целевой объект внутри перемещаемого объекта
-      let currentId = targetObject.connectionId;
+    // 4. Проверка циклов (только если цель - Object или Player)
+    if (targetObject || targetPlayer) {
+      let currentId = targetId;
       const visited = new Set<string>();
-      
+
       while (currentId) {
         if (currentId === objectId) {
-          return { 
-            newState: state, 
-            result: `Ошибка: Невозможно переместить объект "${obj.name}" в "${targetObject.name}" - это создаст циклическую зависимость` 
+          return {
+            newState: state,
+            result: `Ошибка: Циклическая зависимость! "${entity.name}" не может быть помещен в "${targetId}", так как "${targetId}" уже находится внутри "${entity.name}".`
           };
         }
-        if (visited.has(currentId)) break; // Защита от бесконечного цикла
+
+        if (visited.has(currentId)) break;
         visited.add(currentId);
-        
-        const currentObj = newState.objects.find(o => o.id === currentId);
-        if (!currentObj) break;
-        currentId = currentObj.connectionId;
+
+        // Ищем родителя текущего узла
+        const currObj = newState.objects.find(o => o.id === currentId);
+        if (currObj) {
+          currentId = currObj.connectionId;
+          continue;
+        }
+
+        const currPlayer = newState.players.find(p => p.id === currentId);
+        if (currPlayer) {
+          currentId = currPlayer.connectionId;
+          continue;
+        }
+
+        // Если дошли до локации или чего-то неизвестного - стоп
+        break;
       }
     }
 
-    // Обновить connectionId
-    obj.connectionId = targetId;
+    // 5. Перемещаем
+    entity.connectionId = targetId;
 
-    // Формируем информативное сообщение
     let result = "";
-    if (targetPlayer) {
-      result = `Объект "${obj.name}" передан игроку "${targetPlayer.name}"`;
-    } else if (targetLocation) {
-      result = `Объект "${obj.name}" перемещён в локацию "${targetLocation.name}"`;
-    } else if (targetObject) {
-      result = `Объект "${obj.name}" помещён внутрь объекта "${targetObject.name}"`;
+    const targetName = targetLocation?.name || targetPlayer?.name || targetObject?.name || targetId;
+
+    if (entityType === 'player') {
+      result = `Игрок "${entity.name}" переместился в/к "${targetName}"`;
     } else {
-      result = `Объект "${obj.name}" перемещён в ${targetId}`;
+      result = `Объект "${entity.name}" перемещен в/к "${targetName}"`;
     }
 
     return { newState, result };

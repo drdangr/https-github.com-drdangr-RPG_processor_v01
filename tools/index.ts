@@ -8,6 +8,7 @@ import setAttribute from './setAttribute';
 import deleteAttribute from './deleteAttribute';
 import createObject from './createObject';
 import deleteObject from './deleteObject';
+import findEntityLocation from './findEntityLocation';
 
 let tools: GameTool[] = [
   moveObject,
@@ -15,7 +16,8 @@ let tools: GameTool[] = [
   setAttribute,
   deleteAttribute,
   createObject,
-  deleteObject
+  deleteObject,
+  findEntityLocation
 ];
 
 // --- Auto-Loader Mechanism ---
@@ -28,9 +30,9 @@ try {
   if (typeof require !== 'undefined' && require.context) {
     // @ts-ignore
     const context = require.context('./', false, /^\.\/(?!index).*\.ts$/);
-    
+
     const autoLoadedTools: GameTool[] = [];
-    
+
     context.keys().forEach((key: string) => {
       // Import the module
       const module = context(key);

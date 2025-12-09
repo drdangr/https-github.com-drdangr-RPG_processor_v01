@@ -231,7 +231,54 @@ export const processGameTurn = async (
 
       // Берем первого игрока (обычно он один)
       const player = normalizedState.players[0];
-      const playerLocation = normalizedState.locations.find(l => l.id === player.locationId);
+
+      // Helper to recursively find the root location of an entity
+      const findRootLocation = (startId: string): { location: any | null, path: string[] } => {
+        let currentId = startId;
+        const path: string[] = [];
+        const visited = new Set<string>();
+
+        while (currentId) {
+          if (visited.has(currentId)) {
+            console.warn(`[Service] Cycle detected while resolving location for ${startId}`);
+            return { location: null, path };
+          }
+          visited.add(currentId);
+
+          // Check if it's a location
+          const location = normalizedState.locations.find(l => l.id === currentId);
+          if (location) return { location, path };
+
+          // Check if it's an object
+          const obj = normalizedState.objects.find(o => o.id === currentId);
+          if (obj) {
+            path.push(obj.id); // Add object to path
+            currentId = obj.connectionId;
+            continue;
+          }
+
+          // Check if it's a player (link to another player?)
+          const p = normalizedState.players.find(pl => pl.id === currentId);
+          if (p) {
+            // If we started with this player, we just move to their connection
+            // If we found another player in chain, add to path
+            if (currentId !== startId) path.push(p.id);
+            currentId = p.connectionId;
+            continue;
+          }
+
+          // Not found
+          return { location: null, path };
+        }
+        return { location: null, path };
+      };
+
+      const { location: playerLocation, path: locationPath } = findRootLocation(player.id);
+
+      // Log the path if it's interesting (nested)
+      if (locationPath.length > 0) {
+        console.log(`[Service] 📍 Player is inside objects: ${locationPath.join(' -> ')} -> ${playerLocation?.name}`);
+      }
 
       if (!playerLocation) {
         console.warn("[Service] Player location not found, returning full state");
@@ -415,14 +462,58 @@ export const processGameTurn = async (
         return promptCache.get(cacheKey)!;
       }
 
+      // Helper to recursively find the root location of an entity
+      const resolveEntityLocation = (startId: string, state: GameState): { location: any | null, path: string[] } => {
+        let currentId = startId;
+        const path: string[] = [];
+        const visited = new Set<string>();
+
+        while (currentId) {
+          if (visited.has(currentId)) {
+            return { location: null, path };
+          }
+          visited.add(currentId);
+
+          // Check if it's a location
+          const location = state.locations.find(l => l.id === currentId);
+          if (location) return { location, path };
+
+          // Check if it's an object
+          const obj = state.objects.find(o => o.id === currentId);
+          if (obj) {
+            path.push(obj.id); // Add object to path
+            currentId = obj.connectionId;
+            continue;
+          }
+
+          // Check if it's a player
+          const p = state.players.find(pl => pl.id === currentId);
+          if (p) {
+            if (currentId !== startId) path.push(p.id);
+            currentId = p.connectionId;
+            continue;
+          }
+
+          return { location: null, path };
+        }
+        return { location: null, path };
+      };
+
       // [IMPROVEMENT Item 4] Добавляем контекст текущей локации для нарратива
       // Это помогает модели описывать атмосферу и окружение, даже если явно не запрашивалось
       let locationContext = '';
       if (isFinalNarrative && normalizedState.players.length > 0) {
         const player = normalizedState.players[0];
-        const playerLocation = normalizedState.locations.find(l => l.id === player.locationId);
+        const { location: playerLocation, path } = resolveEntityLocation(player.id, normalizedState);
+
         if (playerLocation) {
-          locationContext = `\n\nТЕКУЩАЯ ЛОКАЦИЯ (ГДЕ НАХОДИТСЯ ИГРОК):\nНазвание: ${playerLocation.name}\nОписание: ${playerLocation.description}\nТекущая ситуация/Атмосфера: ${playerLocation.currentSituation || 'Без особенностей'}`;
+          // Если игрок внутри объектов, добавляем это в контекст
+          const insideInfo = path.length > 0 ? `\n(Игрок находится ВНУТРИ: ${path.map(id => {
+            const obj = normalizedState.objects.find(o => o.id === id);
+            return obj ? obj.name : id;
+          }).join(' -> ')})` : '';
+
+          locationContext = `\n\nТЕКУЩАЯ ЛОКАЦИЯ (ГДЕ НАХОДИТСЯ ИГРОК):\nНазвание: ${playerLocation.name}${insideInfo}\nОписание: ${playerLocation.description}\nТекущая ситуация/Атмосфера: ${playerLocation.currentSituation || 'Без особенностей'}`;
         }
       }
 
