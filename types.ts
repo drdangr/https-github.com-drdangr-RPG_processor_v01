@@ -15,6 +15,7 @@ export interface LocationData {
     targetLocationId: string;
     type: 'in' | 'out' | 'bidirectional';
   }>;
+  attributes?: Record<string, string>;
 }
 
 export interface PlayerData {
@@ -25,6 +26,7 @@ export interface PlayerData {
   health: number;
   state: string; // e.g., "drunk", "tired"
   locationId: string; // Explicit location tracking
+  attributes?: Record<string, string>;
 }
 
 export interface ObjectData {
@@ -33,6 +35,7 @@ export interface ObjectData {
   description: string;
   connectionId: string; // ID of Player, Location, or other Object
   state: string; // e.g., "broken", "working"
+  attributes?: Record<string, string>;
 }
 
 export interface GameState {

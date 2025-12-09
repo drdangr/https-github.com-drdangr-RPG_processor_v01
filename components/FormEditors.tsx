@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { WorldData, LocationData, PlayerData, ObjectData } from '../types';
 
 // --- UI Primitives ---
@@ -20,8 +20,8 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", c
 
   return (
     <div className={`mb-3 ${className}`}>
-        <label htmlFor={finalId} className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">{label}</label>
-        <input
+      <label htmlFor={finalId} className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">{label}</label>
+      <input
         type={type}
         id={finalId}
         name={finalName}
@@ -33,9 +33,9 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", c
         autoComplete="new-password"
         data-gramm="false"
         data-lpignore="true"
-        data-1p-ignore="true" 
+        data-1p-ignore="true"
         spellCheck="false"
-        />
+      />
     </div>
   );
 };
@@ -189,23 +189,23 @@ const AttributesEditor = ({ attributes, onChange, onSave }: { attributes: Record
 };
 
 const TextAreaField = ({ label, value, onChange, rows = 3, name, id, onSave }: any) => {
-    const finalId = id || `text_${Math.random().toString(36).substr(2, 9)}`;
-    const finalName = name || `area_${Math.random().toString(36).substr(2, 9)}`;
+  const finalId = id || `text_${Math.random().toString(36).substr(2, 9)}`;
+  const finalName = name || `area_${Math.random().toString(36).substr(2, 9)}`;
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Ctrl+Enter или Cmd+Enter для сохранения в textarea
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        if (onSave) {
-          onSave();
-        }
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Ctrl+Enter или Cmd+Enter для сохранения в textarea
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (onSave) {
+        onSave();
       }
-    };
+    }
+  };
 
-    return (
+  return (
     <div className="mb-3">
-        <label htmlFor={finalId} className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">{label}</label>
-        <textarea
+      <label htmlFor={finalId} className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">{label}</label>
+      <textarea
         id={finalId}
         name={finalName}
         className="w-full bg-gray-950 border border-gray-800 text-gray-300 text-xs rounded px-2 py-2 focus:outline-none focus:border-purple-500 transition-colors resize-none placeholder-gray-700"
@@ -218,9 +218,9 @@ const TextAreaField = ({ label, value, onChange, rows = 3, name, id, onSave }: a
         data-lpignore="true"
         data-1p-ignore="true"
         spellCheck="false"
-        />
+      />
     </div>
-    );
+  );
 };
 
 // --- Generic List Item Wrapper ---
@@ -236,24 +236,24 @@ const ListItem: React.FC<ListItemProps> = ({ id, name, onDelete, children }) => 
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="border border-gray-800 rounded mb-2 bg-gray-900 overflow-hidden">
-      <div 
-        className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-800"
+    <div className="border border-gray-800 rounded mb-2 bg-gray-900">
+      <div
+        className={`flex items-center justify-between p-2 cursor-pointer hover:bg-gray-800 transition-colors ${isOpen ? 'rounded-t' : 'rounded'}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className="text-xs font-bold text-gray-300">{name || 'Unnamed'} <span className="text-gray-600 font-normal">({id})</span></span>
-        <button 
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="text-gray-600 hover:text-red-500 px-2"
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="text-gray-600 hover:text-red-500 px-2"
         >
-            ×
+          ×
         </button>
       </div>
-      
+
       {isOpen && (
-        <div className="p-2 border-t border-gray-800 bg-black/40">
-            {children}
+        <div className="p-2 border-t border-gray-800 bg-black/40 rounded-b">
+          {children}
         </div>
       )}
     </div>
@@ -267,66 +267,186 @@ export interface LocationOption {
   name: string;
 }
 
-// --- Editors ---
+// --- Custom Components ---
 
-const ConnectionEditor = ({ locId, connections, onChange, onSave, availableLocations = [] }: { 
-    locId: string, 
-    connections: LocationData['connections'], 
-    onChange: (c: LocationData['connections']) => void, 
-    onSave?: () => void,
-    availableLocations?: LocationOption[]
+interface HierarchyOption {
+  id: string;
+  path: { id: string; name: string; type: string }[];
+  isGroupHeader?: boolean;
+  groupName?: string;
+}
+
+const HierarchySelect = ({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = "Выберите...",
+  className = ""
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: HierarchyOption[];
+  placeholder?: string;
+  className?: string;
 }) => {
-    const addConnection = () => {
-        onChange([...connections, { targetLocationId: '', type: 'bidirectional' }]);
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-    const updateConnection = (index: number, field: keyof LocationData['connections'][0], value: string) => {
-        const newConns = [...connections];
-        newConns[index] = { ...newConns[index], [field]: value };
-        onChange(newConns);
-    };
+  // Find current selected option to display
+  const selectedOption = options.find(o => o.id === value);
+  const displayValue = selectedOption
+    ? selectedOption.path.map(p => p.name).join(' > ')
+    : value ? `(ID: ${value})` : placeholder;
 
-    const removeConnection = (index: number) => {
-        onChange(connections.filter((_, i) => i !== index));
-    };
+  return (
+    <div className={`mb-3 relative ${className}`} ref={containerRef}>
+      <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1 tracking-wider">{label}</label>
 
-    // Фильтруем локации: исключаем текущую
-    const filteredLocations = availableLocations.filter(loc => loc.id !== locId);
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-gray-950 border border-gray-800 text-gray-300 text-xs rounded px-2 py-2 text-left focus:outline-none focus:border-purple-500 transition-colors flex justify-between items-center"
+      >
+        <span className="truncate">{displayValue}</span>
+        <span className="text-gray-600 text-[10px] ml-2">▼</span>
+      </button>
 
-    return (
-        <div className="mt-2 p-2 bg-gray-900/50 rounded border border-gray-800">
-            <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] font-bold text-gray-500">CONNECTIONS</span>
-                <button type="button" onClick={addConnection} className="text-[10px] text-purple-400 font-bold">+ ADD</button>
-            </div>
-            {connections.map((conn, idx) => (
-                <div key={idx} className="flex gap-1 mb-1">
-                    <select
-                        className="flex-1 bg-gray-950 border border-gray-800 text-[10px] px-1 py-1 text-gray-300"
-                        value={conn.targetLocationId}
-                        onChange={(e) => updateConnection(idx, 'targetLocationId', e.target.value)}
-                    >
-                        <option value="" className="text-gray-500">Выберите локацию...</option>
-                        {filteredLocations.map(loc => (
-                            <option key={loc.id} value={loc.id}>
-                                {loc.name} ({loc.id})
-                            </option>
-                        ))}
-                    </select>
-                    <select
-                        className="w-16 bg-gray-950 border border-gray-800 text-[10px] text-gray-300"
-                        value={conn.type}
-                        onChange={(e) => updateConnection(idx, 'type', e.target.value as any)}
-                    >
-                        <option value="bidirectional">Bi</option>
-                        <option value="in">In</option>
-                        <option value="out">Out</option>
-                    </select>
-                    <button type="button" onClick={() => removeConnection(idx)} className="text-red-500 px-1 hover:text-red-400">×</button>
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-700 rounded shadow-xl max-h-60 overflow-y-auto left-0">
+          <div className="p-1 space-y-px">
+            {options.map((opt) => {
+              if (opt.isGroupHeader) {
+                return (
+                  <div key={`group-${opt.groupName}`} className="px-2 py-1.5 text-[10px] font-bold text-gray-500 bg-gray-950 uppercase tracking-wider sticky top-0">
+                    {opt.groupName}
+                  </div>
+                );
+              }
+
+              const isSelected = opt.id === value;
+
+              return (
+                <div
+                  key={opt.id}
+                  className={`px-2 py-1.5 rounded flex flex-wrap items-center gap-1 ${isSelected ? 'bg-purple-900/30' : 'hover:bg-gray-800'}`}
+                >
+                  {opt.path.map((segment, idx) => {
+                    const isLast = idx === opt.path.length - 1;
+                    return (
+                      <React.Fragment key={idx}>
+                        {idx > 0 && <span className="text-gray-600 text-[10px]">&gt;</span>}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onChange(segment.id);
+                            setIsOpen(false);
+                          }}
+                          className={`
+                             text-xs px-1.5 py-0.5 rounded border border-gray-700 transition-colors
+                             ${segment.id === value ? 'bg-purple-600 text-white border-purple-500' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:border-gray-500'}
+                             ${isLast ? 'font-medium' : 'opacity-80'}
+                           `}
+                        >
+                          {segment.name}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+                  {/* Invisible overlay for the whole row to catch clicks in empty space? 
+                      Actually, better to just let the row be the main selector for the *item itself*?
+                      But the user wants chips. If I click empty space in the row, maybe select the item (last chip)?
+                  */}
+                  <div
+                    className="flex-grow h-4 cursor-pointer"
+                    onClick={() => {
+                      onChange(opt.id);
+                      setIsOpen(false);
+                    }}
+                  />
                 </div>
-            ))}
+              );
+            })}
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
+};
+
+const ConnectionEditor = ({ locId, connections, onChange, onSave, availableLocations = [] }: {
+  locId: string,
+  connections: LocationData['connections'],
+  onChange: (c: LocationData['connections']) => void,
+  onSave?: () => void,
+  availableLocations?: LocationOption[]
+}) => {
+  const addConnection = () => {
+    onChange([...connections, { targetLocationId: '', type: 'bidirectional' }]);
+  };
+
+  const updateConnection = (index: number, field: keyof LocationData['connections'][0], value: string) => {
+    const newConns = [...connections];
+    newConns[index] = { ...newConns[index], [field]: value };
+    onChange(newConns);
+  };
+
+  const removeConnection = (index: number) => {
+    onChange(connections.filter((_, i) => i !== index));
+  };
+
+  // Фильтруем локации: исключаем текущую
+  const filteredLocations = availableLocations.filter(loc => loc.id !== locId);
+
+  return (
+    <div className="mt-2 p-2 bg-gray-900/50 rounded border border-gray-800">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-[10px] font-bold text-gray-500">CONNECTIONS</span>
+        <button type="button" onClick={addConnection} className="text-[10px] text-purple-400 font-bold">+ ADD</button>
+      </div>
+      {connections.map((conn, idx) => (
+        <div key={idx} className="flex gap-1 mb-1">
+          <select
+            className="flex-1 bg-gray-950 border border-gray-800 text-[10px] px-1 py-1 text-gray-300"
+            value={conn.targetLocationId}
+            onChange={(e) => updateConnection(idx, 'targetLocationId', e.target.value)}
+          >
+            <option value="" className="text-gray-500">Выберите локацию...</option>
+            {filteredLocations.map(loc => (
+              <option key={loc.id} value={loc.id}>
+                {loc.name} ({loc.id})
+              </option>
+            ))}
+          </select>
+          <select
+            className="w-16 bg-gray-950 border border-gray-800 text-[10px] text-gray-300"
+            value={conn.type}
+            onChange={(e) => updateConnection(idx, 'type', e.target.value as any)}
+          >
+            <option value="bidirectional">Bi</option>
+            <option value="in">In</option>
+            <option value="out">Out</option>
+          </select>
+          <button type="button" onClick={() => removeConnection(idx)} className="text-red-500 px-1 hover:text-red-400">×</button>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 export const WorldEditor: React.FC<{ data: WorldData; onChange: (d: WorldData) => void; onSave?: () => void }> = ({ data, onChange, onSave }) => {
@@ -345,32 +465,32 @@ export const LocationsEditor: React.FC<{ data: LocationData[]; onChange: (d: Loc
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW LOCATION</button>
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
-           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
-           <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} onSave={onSave} />
-           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
-           <ConnectionEditor 
-             locId={item.id} 
-             connections={item.connections} 
-             onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }} 
-             onSave={onSave}
-             availableLocations={data.map(loc => ({ id: loc.id, name: loc.name }))}
-           />
+          <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
+          <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
+          <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
+          <TextAreaField label="Situation" value={item.currentSituation} onChange={(v: string) => { const n = [...data]; n[i].currentSituation = v; onChange(n); }} onSave={onSave} />
+          <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
+          <ConnectionEditor
+            locId={item.id}
+            connections={item.connections}
+            onChange={(c) => { const n = [...data]; n[i].connections = c; onChange(n); }}
+            onSave={onSave}
+            availableLocations={data.map(loc => ({ id: loc.id, name: loc.name }))}
+          />
         </ListItem>
       ))}
     </div>
   );
 };
 
-export const PlayersEditor: React.FC<{ 
-  data: PlayerData[]; 
-  onChange: (d: PlayerData[]) => void; 
+export const PlayersEditor: React.FC<{
+  data: PlayerData[];
+  onChange: (d: PlayerData[]) => void;
   onSave?: () => void;
   availableLocations?: LocationOption[];
 }> = ({ data, onChange, onSave, availableLocations = [] }) => {
   const add = () => onChange([...data, { id: `char_${Date.now()}`, name: 'New Char', description: '', locationId: '', attributes: {} }]);
-  
+
   // Преобразуем локации в опции для SelectField
   const locationOptions: SelectOption[] = availableLocations.map(loc => ({
     id: loc.id,
@@ -383,18 +503,18 @@ export const PlayersEditor: React.FC<{
       <button type="button" onClick={add} className="w-full py-1 mb-3 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW PLAYER</button>
       {data.map((item, i) => (
         <ListItem key={i} id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== i))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
-           <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
-           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
-           <SelectField 
-             label="Location" 
-             value={item.locationId} 
-             onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }} 
-             options={locationOptions}
-             placeholder="Выберите локацию..."
-             onSave={onSave} 
-           />
+          <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[i].name = v; onChange(n); }} onSave={onSave} />
+          <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[i].id = v; onChange(n); }} onSave={onSave} />
+          <TextAreaField label="Description" value={item.description} onChange={(v: string) => { const n = [...data]; n[i].description = v; onChange(n); }} onSave={onSave} />
+          <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[i].attributes = attrs; onChange(n); }} onSave={onSave} />
+          <SelectField
+            label="Location"
+            value={item.locationId}
+            onChange={(v: string) => { const n = [...data]; n[i].locationId = v; onChange(n); }}
+            options={locationOptions}
+            placeholder="Выберите локацию..."
+            onSave={onSave}
+          />
         </ListItem>
       ))}
     </div>
@@ -407,25 +527,25 @@ export interface ConnectionTarget {
   type: 'player' | 'location' | 'object';
 }
 
-export const ObjectsEditor: React.FC<{ 
-  data: ObjectData[]; 
-  onChange: (d: ObjectData[]) => void; 
+export const ObjectsEditor: React.FC<{
+  data: ObjectData[];
+  onChange: (d: ObjectData[]) => void;
   onSave?: () => void;
   connectionTargets?: ConnectionTarget[];
 }> = ({ data, onChange, onSave, connectionTargets = [] }) => {
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
-  
+
   // Создаем карту всех connectionTargets для быстрого поиска названий
   const connectionTargetMap = new Map(connectionTargets.map(t => [t.id, t]));
-  
+
   // Создаем карту объектов по ID для быстрого поиска
-  const objectsMap = new Map(data.map(obj => [obj.id, obj]));
-  
+  const objectsMap = new Map<string, ObjectData>(data.map(obj => [obj.id, obj]));
+
   // Находим корневые объекты (подключены к локациям или игрокам) и объекты без связи
   const rootObjects: ObjectData[] = [];
   const ungroupedObjects: ObjectData[] = [];
   const objectsByParent = new Map<string, ObjectData[]>();
-  
+
   data.forEach(obj => {
     if (!obj.connectionId) {
       ungroupedObjects.push(obj);
@@ -444,40 +564,40 @@ export const ObjectsEditor: React.FC<{
       }
     }
   });
-  
+
   // Функция для получения всех дочерних объектов рекурсивно
   const getChildren = (parentId: string): ObjectData[] => {
     return objectsByParent.get(parentId) || [];
   };
-  
+
   // Функция для сортировки объектов: объекты с именем "New Obj" вверху, затем по алфавиту
   const sortObjects = (objects: ObjectData[]) => {
     return [...objects].sort((a, b) => {
       const aIsNew = (a.name || '').trim() === 'New Obj';
       const bIsNew = (b.name || '').trim() === 'New Obj';
-      
+
       // Если один новый, а другой нет - новый идет первым
       if (aIsNew && !bIsNew) return -1;
       if (!aIsNew && bIsNew) return 1;
-      
+
       // Если оба новые или оба заполненные - сортируем по алфавиту
       const nameA = (a.name || '').toLowerCase();
       const nameB = (b.name || '').toLowerCase();
       return nameA.localeCompare(nameB, 'ru');
     });
   };
-  
+
   // Сортируем корневые объекты
   const sortedRootObjects = sortObjects(rootObjects);
-  
+
   // Сортируем объекты без связи
   const sortedUngroupedObjects = sortObjects(ungroupedObjects);
-  
+
   // Сортируем дочерние объекты для каждого родителя
   objectsByParent.forEach((children, parentId) => {
     objectsByParent.set(parentId, sortObjects(children));
   });
-  
+
   // Группируем корневые объекты по их connectionId (локация/игрок)
   const groupedByRoot = new Map<string, ObjectData[]>();
   sortedRootObjects.forEach(obj => {
@@ -488,12 +608,12 @@ export const ObjectsEditor: React.FC<{
       groupedByRoot.get(obj.connectionId)!.push(obj);
     }
   });
-  
+
   // Сортируем объекты внутри каждой группы (новые объекты вверху)
   groupedByRoot.forEach((objects, connectionId) => {
     groupedByRoot.set(connectionId, sortObjects(objects));
   });
-  
+
   // Сортируем группы по названию локации/игрока
   const sortedGroups = Array.from(groupedByRoot.keys())
     .map(connectionId => {
@@ -511,40 +631,112 @@ export const ObjectsEditor: React.FC<{
       const nameB = (b.name || '').toLowerCase();
       return nameA.localeCompare(nameB, 'ru');
     });
-  
-  // Преобразуем targets в опции для SelectField и сортируем по алфавиту
-  const connectionOptions: SelectOption[] = connectionTargets
-    .map(t => ({
-      id: t.id,
-      label: `${t.name} (${t.id})`,
-      group: t.type === 'player' ? '👤 Игроки' : t.type === 'location' ? '📍 Локации' : '📦 Объекты'
-    }))
-    .sort((a, b) => {
-      const labelA = (a.label || '').toLowerCase();
-      const labelB = (b.label || '').toLowerCase();
-      return labelA.localeCompare(labelB, 'ru');
+
+  // Helper to resolve hierarchy
+  const getHierarchyInfo = (targetId: string, visited = new Set<string>()): { rootName: string, rootType: string, path: { id: string, name: string, type: string }[] } => {
+    if (visited.has(targetId)) return { rootName: 'Loop', rootType: 'error', path: [{ id: targetId, name: 'Loop', type: 'error' }] };
+    visited.add(targetId);
+
+    const target = connectionTargetMap.get(targetId);
+    if (!target) return { rootName: 'Unknown', rootType: 'unknown', path: [{ id: targetId, name: 'Unknown', type: 'unknown' }] };
+
+    if (target.type === 'location' || target.type === 'player') {
+      return { rootName: target.name, rootType: target.type, path: [{ id: target.id, name: target.name, type: target.type }] };
+    }
+
+    // It is an object
+    const obj = objectsMap.get(targetId);
+    if (obj && obj.connectionId) {
+      const parentInfo = getHierarchyInfo(obj.connectionId, new Set(visited));
+
+      return {
+        rootName: parentInfo.rootName,
+        rootType: parentInfo.rootType,
+        path: [...parentInfo.path, { id: target.id, name: target.name, type: target.type }]
+      };
+    }
+
+    // Unconnected object
+    return { rootName: 'Unconnected', rootType: 'none', path: [{ id: target.id, name: target.name, type: target.type }] };
+  };
+
+  // Prepare options for HierarchySelect
+  const hierarchyOptions: HierarchyOption[] = [];
+
+  // 1. Group items
+  const itemsByGroup: Record<string, typeof connectionTargets> = {
+    '📍 Locations': [],
+    '👤 Players': [],
+  };
+
+  const connectedObjectsGroups: Record<string, typeof connectionTargets> = {};
+  const unconnectedObjects: typeof connectionTargets = [];
+
+  connectionTargets.forEach(t => {
+    if (t.type === 'location') { itemsByGroup['📍 Locations'].push(t); return; }
+    if (t.type === 'player') { itemsByGroup['👤 Players'].push(t); return; }
+
+    // Object
+    const info = getHierarchyInfo(t.id);
+    if (info.rootType === 'none') {
+      unconnectedObjects.push(t);
+    } else {
+      let groupName = '📦 Objects';
+      if (info.rootType === 'player') groupName = `👤 ${info.rootName}`;
+      else if (info.rootType === 'location') groupName = `📍 ${info.rootName}`;
+
+      if (!connectedObjectsGroups[groupName]) connectedObjectsGroups[groupName] = [];
+      connectedObjectsGroups[groupName].push(t);
+    }
+  });
+
+  // Helper to add group to options
+  const addGroup = (groupName: string, items: typeof connectionTargets) => {
+    if (items.length === 0) return;
+
+    // Sort items
+    items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    hierarchyOptions.push({ id: `group-${groupName}`, path: [], isGroupHeader: true, groupName });
+    items.forEach(item => {
+      const info = getHierarchyInfo(item.id);
+      hierarchyOptions.push({
+        id: item.id,
+        path: info.path
+      });
     });
+  };
+
+  // Add groups in order
+  addGroup('📍 Locations', itemsByGroup['📍 Locations']);
+  addGroup('👤 Players', itemsByGroup['👤 Players']);
+
+  // Add object groups sorted by name
+  Object.keys(connectedObjectsGroups).sort().forEach(groupName => {
+    addGroup(groupName, connectedObjectsGroups[groupName]);
+  });
+
+  addGroup('📦 Unconnected', unconnectedObjects);
 
   // Рекурсивная функция для рендеринга объекта и его вложенных объектов
   const renderObjectWithChildren = (item: ObjectData, depth: number = 0) => {
     const originalIndex = data.findIndex(obj => obj.id === item.id);
     const children = getChildren(item.id);
     const sortedChildren = sortObjects(children);
-    
+
     return (
       <div key={item.id} className={depth > 0 ? `ml-4 border-l-2 border-gray-700 pl-2` : ''}>
         <ListItem id={item.id} name={item.name} onDelete={() => onChange(data.filter((_, idx) => idx !== originalIndex))}>
-           <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
-           <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
-           <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
-           <SelectField 
-             label="Connected To" 
-             value={item.connectionId} 
-             onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }} 
-             options={connectionOptions.filter(opt => opt.id !== item.id)} 
-             placeholder="Выберите владельца/контейнер..."
-             onSave={onSave} 
-           />
+          <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
+          <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
+          <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
+          <HierarchySelect
+            label="Connected To"
+            value={item.connectionId}
+            onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }}
+            options={hierarchyOptions.filter(opt => opt.id !== item.id)}
+            placeholder="Выберите владельца/контейнер..."
+          />
         </ListItem>
         {/* Рекурсивно рендерим дочерние объекты */}
         {sortedChildren.length > 0 && (
@@ -562,7 +754,7 @@ export const ObjectsEditor: React.FC<{
       <div className="sticky top-0 z-10 p-4 pb-2 bg-gray-900/50 backdrop-blur-sm border-b border-gray-800">
         <button type="button" onClick={add} className="w-full py-1 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
       </div>
-      
+
       {/* Контент с отступом */}
       <div className="p-4 pt-2">
         {/* Объекты без связи - в начале */}
@@ -574,7 +766,7 @@ export const ObjectsEditor: React.FC<{
             {sortedUngroupedObjects.map(obj => renderObjectWithChildren(obj, 0))}
           </div>
         )}
-        
+
         {/* Группы по Connected To */}
         {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => (
           <div key={connectionId} className="mb-4">
