@@ -37,7 +37,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1764621899013",
     "name": "Статуэтка в виде бюста Наполеона",
-    "connectionId": "loc_001",
+    "connectionId": "obj_1764817473286",
     "attributes": {
       "condition": "целая",
       "size": "небольшая",
@@ -110,7 +110,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   },
   {
     "id": "obj_1764718477192_7wyh",
-    "name": "Сапог (надетый Джеком)",
+    "name": "Сапог (Левый)",
     "connectionId": "char_001",
     "attributes": {
       "condition": "потертый, но крепкий"
@@ -118,7 +118,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   },
   {
     "id": "obj_1764718477192_s71y",
-    "name": "Сапог Джека",
+    "name": "Сапог Джека (Правый)",
     "connectionId": "obj_1764817473286",
     "attributes": {
       "condition": "потертый, но крепкий"

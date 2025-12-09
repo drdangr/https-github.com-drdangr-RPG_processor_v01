@@ -537,6 +537,17 @@ export const ObjectsEditor: React.FC<{
   players?: PlayerData[];
 }> = ({ data, onChange, onSave, connectionTargets = [], locations = [], players = [] }) => {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  const toggleCollapse = (id: string) => {
+    const newSet = new Set(collapsedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setCollapsedIds(newSet);
+  };
 
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
 
@@ -765,6 +776,8 @@ export const ObjectsEditor: React.FC<{
     };
 
     const isDragOver = dragOverId === item.id;
+    const hasChildren = sortedChildren.length > 0;
+    const isCollapsed = collapsedIds.has(item.id);
 
     return (
       <div
@@ -792,25 +805,38 @@ export const ObjectsEditor: React.FC<{
           handleDrop(draggedId, item.id);
         }}
       >
-        <ListItem id={item.id} name={item.name} onDelete={handleDelete}>
-          <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
-          <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
-          <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
-          <HierarchySelect
-            label="Connected To"
-            value={item.connectionId}
-            onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }}
-            options={hierarchyOptions.filter(opt => opt.id !== item.id)}
-            placeholder="Выберите владельца/контейнер..."
-          />
+        <div className="flex items-start gap-1">
+          {hasChildren && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); toggleCollapse(item.id); }}
+              className="mt-2 w-4 h-4 flex-shrink-0 flex items-center justify-center text-[10px] text-gray-400 hover:text-white bg-gray-900 border border-gray-700 rounded transition-colors"
+            >
+              {isCollapsed ? '▶' : '▼'}
+            </button>
+          )}
+          <div className="flex-1 min-w-0">
+            <ListItem id={item.id} name={item.name} onDelete={handleDelete}>
+              <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
+              <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
+              <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
+              <HierarchySelect
+                label="Connected To"
+                value={item.connectionId}
+                onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }}
+                options={hierarchyOptions.filter(opt => opt.id !== item.id)}
+                placeholder="Выберите владельца/контейнер..."
+              />
+            </ListItem>
 
-        </ListItem>
-        {/* Рекурсивно рендерим дочерние объекты */}
-        {sortedChildren.length > 0 && (
-          <div className="mt-1">
-            {sortedChildren.map(child => renderObjectWithChildren(child, depth + 1))}
+            {/* Рекурсивно рендерим дочерние объекты если не свернуто */}
+            {hasChildren && !isCollapsed && (
+              <div className="mt-1">
+                {sortedChildren.map(child => renderObjectWithChildren(child, depth + 1))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -837,6 +863,8 @@ export const ObjectsEditor: React.FC<{
         {/* Группы по Connected To */}
         {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => {
           const isGroupDragOver = dragOverId === connectionId;
+          const isGroupCollapsed = collapsedIds.has(connectionId);
+
           return (
             <div
               key={connectionId}
@@ -852,10 +880,17 @@ export const ObjectsEditor: React.FC<{
                 handleDrop(draggedId, connectionId);
               }}
             >
-              <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-2 px-1 pointer-events-none">
-                {icon} {connectionName}
+              <div
+                className="flex items-center gap-2 mb-2 px-1 cursor-pointer hover:bg-gray-800/50 rounded py-1"
+                onClick={() => toggleCollapse(connectionId)}
+              >
+                <span className="text-purple-400 text-[10px]">{isGroupCollapsed ? '▶' : '▼'}</span>
+                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider pointer-events-none">
+                  {icon} {connectionName} <span className="text-gray-600 ml-1">({objects.length})</span>
+                </div>
               </div>
-              {objects.map(obj => renderObjectWithChildren(obj, 0))}
+
+              {!isGroupCollapsed && objects.map(obj => renderObjectWithChildren(obj, 0))}
             </div>
           );
         })}
