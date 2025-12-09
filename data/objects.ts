@@ -27,7 +27,7 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_003",
     "name": "Бутылка виски",
-    "connectionId": "obj_1764817473286",
+    "connectionId": "char_001",
     "attributes": {
       "condition": "почти пустая",
       "quality": "дешевый синтетический",
@@ -284,9 +284,31 @@ export const INITIAL_OBJECTS: ObjectData[] = [
   {
     "id": "obj_1765260119855",
     "name": "Полки с книгами",
-    "connectionId": "",
+    "connectionId": "loc_1764698263182",
     "attributes": {
       "description": "нексолько полок, плотно уставленных самой разнообразной литературой"
+    }
+  },
+  {
+    "id": "obj_1765297337425",
+    "name": "Кресло на колесиках",
+    "connectionId": "loc_001",
+    "attributes": {
+      "feature": "movable",
+      "description": "офисное кресло на колесиках",
+      "appearance": "видавшее виды",
+      "material": "leather",
+      "color": "blackish"
+    }
+  },
+  {
+    "id": "obj_1765298172882_93k0",
+    "name": "Книжные полки",
+    "connectionId": "loc_1764698263182",
+    "attributes": {
+      "condition": "старые, деревянные, покрытые толстым слоем пыли",
+      "size": "занимают всю стену",
+      "content": "образцы самой разнообразной литературой"
     }
   }
 ];

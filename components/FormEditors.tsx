@@ -531,11 +531,12 @@ export interface ConnectionTarget {
 export const ObjectsEditor: React.FC<{
   data: ObjectData[];
   onChange: (d: ObjectData[]) => void;
+  onUpdatePlayers?: (d: PlayerData[]) => void;
   onSave?: () => void;
   connectionTargets?: ConnectionTarget[];
   locations?: LocationData[];
   players?: PlayerData[];
-}> = ({ data, onChange, onSave, connectionTargets = [], locations = [], players = [] }) => {
+}> = ({ data, onChange, onUpdatePlayers, onSave, connectionTargets = [], locations = [], players = [] }) => {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
@@ -551,288 +552,404 @@ export const ObjectsEditor: React.FC<{
 
   const add = () => onChange([...data, { id: `obj_${Date.now()}`, name: 'New Obj', connectionId: '', attributes: {} }]);
 
-  // Создаем карту всех connectionTargets для быстрого поиска названий
+  // --- Map Building ---
   const connectionTargetMap = new Map(connectionTargets.map(t => [t.id, t]));
-
-  // Создаем карту объектов по ID для быстрого поиска
   const objectsMap = new Map<string, ObjectData>(data.map(obj => [obj.id, obj]));
+  const playersMap = new Map<string, PlayerData>(players.map(p => [p.id, p]));
 
-  // Находим корневые объекты (подключены к локациям или игрокам) и объекты без связи
-  const rootObjects: ObjectData[] = [];
-  const ungroupedObjects: ObjectData[] = [];
-  const objectsByParent = new Map<string, ObjectData[]>();
-
-  data.forEach(obj => {
-    if (!obj.connectionId) {
-      ungroupedObjects.push(obj);
-    } else {
-      const target = connectionTargetMap.get(obj.connectionId);
-      if (target && (target.type === 'location' || target.type === 'player')) {
-        // Это корневой объект (подключен к локации или игроку)
-        rootObjects.push(obj);
-      } else if (target && target.type === 'object') {
-        // Это вложенный объект (подключен к другому объекту, который существует)
-        const parentId = obj.connectionId;
-        if (!objectsByParent.has(parentId)) {
-          objectsByParent.set(parentId, []);
-        }
-        objectsByParent.get(parentId)!.push(obj);
-      } else {
-        // connectionId установлен, но target не найден (объект/локация/игрок удалён)
-        // Обрабатываем такой объект как объект без связи
-        ungroupedObjects.push(obj);
-      }
-    }
-  });
-
-  // Функция для получения всех дочерних объектов рекурсивно
-  const getChildren = (parentId: string): ObjectData[] => {
-    return objectsByParent.get(parentId) || [];
+  // --- Hierarchy Logic ---
+  const getChildren = (parentId: string): { type: 'object' | 'player', data: ObjectData | PlayerData }[] => {
+    const children: { type: 'object' | 'player', data: ObjectData | PlayerData }[] = [];
+    data.forEach(obj => {
+      if (obj.connectionId === parentId) children.push({ type: 'object', data: obj });
+    });
+    players.forEach(p => {
+      if (p.connectionId === parentId) children.push({ type: 'player', data: p });
+    });
+    return children;
   };
 
-  // Функция для сортировки объектов: объекты с именем "New Obj" вверху, затем по алфавиту
-  const sortObjects = (objects: ObjectData[]) => {
-    return [...objects].sort((a, b) => {
-      const aIsNew = (a.name || '').trim() === 'New Obj';
-      const bIsNew = (b.name || '').trim() === 'New Obj';
-
-      // Если один новый, а другой нет - новый идет первым
-      if (aIsNew && !bIsNew) return -1;
-      if (!aIsNew && bIsNew) return 1;
-
-      // Если оба новые или оба заполненные - сортируем по алфавиту
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB, 'ru');
+  const sortEntities = (items: { type: 'object' | 'player', data: ObjectData | PlayerData }[]) => {
+    return [...items].sort((a, b) => {
+      const nameA = (a.data.name || '').toLowerCase();
+      const nameB = (b.data.name || '').toLowerCase();
+      const cmp = nameA.localeCompare(nameB, 'ru');
+      if (cmp !== 0) return cmp;
+      if (a.type === 'player' && b.type !== 'player') return -1;
+      if (a.type !== 'player' && b.type === 'player') return 1;
+      return 0;
     });
   };
 
-  // Сортируем корневые объекты
-  const sortedRootObjects = sortObjects(rootObjects);
+  // --- Data Preparation ---
+  const rootItems: { type: 'object' | 'player', data: ObjectData | PlayerData }[] = [];
+  const ungroupedItems: { type: 'object' | 'player', data: ObjectData | PlayerData }[] = [];
 
-  // Сортируем объекты без связи
-  const sortedUngroupedObjects = sortObjects(ungroupedObjects);
+  data.forEach(obj => {
+    if (!obj.connectionId) { ungroupedItems.push({ type: 'object', data: obj }); return; }
+    const target = connectionTargetMap.get(obj.connectionId);
+    if (!target) { ungroupedItems.push({ type: 'object', data: obj }); return; }
 
-  // Сортируем дочерние объекты для каждого родителя
-  objectsByParent.forEach((children, parentId) => {
-    objectsByParent.set(parentId, sortObjects(children));
-  });
-
-  // Группируем корневые объекты по их connectionId (локация/игрок)
-  const groupedByRoot = new Map<string, ObjectData[]>();
-  sortedRootObjects.forEach(obj => {
-    if (obj.connectionId) {
-      if (!groupedByRoot.has(obj.connectionId)) {
-        groupedByRoot.set(obj.connectionId, []);
-      }
-      groupedByRoot.get(obj.connectionId)!.push(obj);
+    if (target.type === 'location') {
+      rootItems.push({ type: 'object', data: obj });
     }
   });
 
-  // Сортируем объекты внутри каждой группы (новые объекты вверху)
-  groupedByRoot.forEach((objects, connectionId) => {
-    groupedByRoot.set(connectionId, sortObjects(objects));
+  players.forEach(p => {
+    if (!p.connectionId) { ungroupedItems.push({ type: 'player', data: p }); return; }
+    const target = connectionTargetMap.get(p.connectionId);
+    if (!target) { ungroupedItems.push({ type: 'player', data: p }); return; }
+
+    if (target.type === 'location') {
+      rootItems.push({ type: 'player', data: p });
+    }
   });
 
-  // Сортируем группы по названию локации/игрока
-  const sortedGroups = Array.from(groupedByRoot.keys())
+  const groupedRootItems = new Map<string, { type: 'object' | 'player', data: ObjectData | PlayerData }[]>();
+  rootItems.forEach(item => {
+    const parentId = item.data.connectionId;
+    if (!groupedRootItems.has(parentId)) groupedRootItems.set(parentId, []);
+    groupedRootItems.get(parentId)!.push(item);
+  });
+
+  const sortedUngrouped = sortEntities(ungroupedItems);
+
+  const displayGroups = Array.from(groupedRootItems.keys())
     .map(connectionId => {
       const target = connectionTargetMap.get(connectionId);
-      const icon = target?.type === 'player' ? '👤' : '📍';
+      let icon = '❓';
+      if (target?.type === 'location') icon = '📍';
+      else if (target?.type === 'player') icon = '👤';
+      else if (target?.type === 'object') icon = '📦';
+
       return {
         id: connectionId,
         name: target?.name || connectionId,
         icon: icon,
-        objects: groupedByRoot.get(connectionId)!
+        items: sortEntities(groupedRootItems.get(connectionId)!)
       };
     })
-    .sort((a, b) => {
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB, 'ru');
-    });
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-  // Helper to resolve hierarchy
-  const getHierarchyInfo = (targetId: string, visited = new Set<string>()): { rootName: string, rootType: string, path: { id: string, name: string, type: string }[] } => {
-    if (visited.has(targetId)) return { rootName: 'Loop', rootType: 'error', path: [{ id: targetId, name: 'Loop', type: 'error' }] };
+  // --- Hierarchy Options ---
+  const getHierarchyInfo = (targetId: string, visited = new Set<string>()): { path: string[] } => {
+    if (visited.has(targetId)) return { path: [] };
     visited.add(targetId);
-
     const target = connectionTargetMap.get(targetId);
-    if (!target) return { rootName: 'Unknown', rootType: 'unknown', path: [{ id: targetId, name: 'Unknown', type: 'unknown' }] };
+    if (!target) return { path: [targetId] };
+    if (target.type === 'location') return { path: [targetId] };
 
-    if (target.type === 'location' || target.type === 'player') {
-      return { rootName: target.name, rootType: target.type, path: [{ id: target.id, name: target.name, type: target.type }] };
-    }
+    let parentId: string | undefined;
+    if (target.type === 'object') parentId = objectsMap.get(targetId)?.connectionId;
+    else if (target.type === 'player') parentId = playersMap.get(targetId)?.connectionId;
 
-    // It is an object
-    const obj = objectsMap.get(targetId);
-    if (obj && obj.connectionId) {
-      const parentInfo = getHierarchyInfo(obj.connectionId, new Set(visited));
-
-      return {
-        rootName: parentInfo.rootName,
-        rootType: parentInfo.rootType,
-        path: [...parentInfo.path, { id: target.id, name: target.name, type: target.type }]
-      };
-    }
-
-    // Unconnected object
-    return { rootName: 'Unconnected', rootType: 'none', path: [{ id: target.id, name: target.name, type: target.type }] };
+    if (parentId) return { path: [...getHierarchyInfo(parentId, new Set(visited)).path, targetId] };
+    return { path: [targetId] };
   };
 
-  // Prepare options for HierarchySelect
   const hierarchyOptions: HierarchyOption[] = [];
-
-  // 1. Group items
-  const itemsByGroup: Record<string, typeof connectionTargets> = {
-    '📍 Locations': [],
-    '👤 Players': [],
-  };
-
-  const connectedObjectsGroups: Record<string, typeof connectionTargets> = {};
-  const unconnectedObjects: typeof connectionTargets = [];
+  const itemsByGroup: Record<string, typeof connectionTargets> = { '📍 Locations': [], '👤 Players': [] };
+  const connectedContainerGroups: Record<string, typeof connectionTargets> = {};
+  const unconnectedContainers: typeof connectionTargets = [];
 
   connectionTargets.forEach(t => {
     if (t.type === 'location') { itemsByGroup['📍 Locations'].push(t); return; }
-    if (t.type === 'player') { itemsByGroup['👤 Players'].push(t); return; }
 
-    // Object
+    let connectionId: string | undefined;
+    if (t.type === 'object') connectionId = objectsMap.get(t.id)?.connectionId;
+    if (t.type === 'player') connectionId = playersMap.get(t.id)?.connectionId;
+
+    if (!connectionId) {
+      if (t.type === 'player') itemsByGroup['👤 Players'].push(t);
+      else unconnectedContainers.push(t);
+      return;
+    }
+
     const info = getHierarchyInfo(t.id);
-    if (info.rootType === 'none') {
-      unconnectedObjects.push(t);
-    } else {
-      let groupName = '📦 Objects';
-      if (info.rootType === 'player') groupName = `👤 ${info.rootName}`;
-      else if (info.rootType === 'location') groupName = `📍 ${info.rootName}`;
+    const rootId = info.path[0];
+    const rootTarget = connectionTargetMap.get(rootId);
 
-      if (!connectedObjectsGroups[groupName]) connectedObjectsGroups[groupName] = [];
-      connectedObjectsGroups[groupName].push(t);
+    if (!rootTarget) { unconnectedContainers.push(t); return; }
+
+    if (rootTarget.type === 'location') {
+      const groupName = `📍 ${rootTarget.name}`;
+      if (!connectedContainerGroups[groupName]) connectedContainerGroups[groupName] = [];
+      connectedContainerGroups[groupName].push(t);
+    } else if (rootTarget.type === 'player') {
+      if (rootTarget.id === t.id) itemsByGroup['👤 Players'].push(t);
+      else {
+        const groupName = `👤 ${rootTarget.name}`;
+        if (!connectedContainerGroups[groupName]) connectedContainerGroups[groupName] = [];
+        connectedContainerGroups[groupName].push(t);
+      }
+    } else {
+      if (rootTarget.id === t.id) unconnectedContainers.push(t);
+      else {
+        const groupName = `📦 ${rootTarget.name}`;
+        if (!connectedContainerGroups[groupName]) connectedContainerGroups[groupName] = [];
+        connectedContainerGroups[groupName].push(t);
+      }
     }
   });
 
-  // Helper to add group to options
   const addGroup = (groupName: string, items: typeof connectionTargets) => {
     if (items.length === 0) return;
-
-    // Sort items
     items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
     hierarchyOptions.push({ id: `group-${groupName}`, path: [], isGroupHeader: true, groupName });
     items.forEach(item => {
-      const info = getHierarchyInfo(item.id);
-      hierarchyOptions.push({
-        id: item.id,
-        path: info.path
+      const pathIds = getHierarchyInfo(item.id).path;
+      const path = pathIds.map(id => {
+        const t = connectionTargetMap.get(id);
+        return { id: id, name: t?.name || id, type: t?.type || '?' };
       });
+      hierarchyOptions.push({ id: item.id, path });
     });
   };
 
-  // Add groups in order
   addGroup('📍 Locations', itemsByGroup['📍 Locations']);
   addGroup('👤 Players', itemsByGroup['👤 Players']);
+  Object.keys(connectedContainerGroups).sort().forEach(g => addGroup(g, connectedContainerGroups[g]));
+  addGroup('📦 Unconnected', unconnectedContainers);
 
-  // Add object groups sorted by name
-  Object.keys(connectedObjectsGroups).sort().forEach(groupName => {
-    addGroup(groupName, connectedObjectsGroups[groupName]);
-  });
+  // --- Handlers ---
+  const findRootLocation = (entityId: string): string | undefined => {
+    let currentId = entityId;
+    const visited = new Set<string>();
 
-  addGroup('📦 Unconnected', unconnectedObjects);
+    while (currentId) {
+      if (visited.has(currentId)) return undefined; // Cycle detected
+      visited.add(currentId);
+
+      // Check if it's a location
+      const loc = locations.find(l => l.id === currentId);
+      if (loc) return loc.id;
+
+      // Check if it's an object
+      const obj = objectsMap.get(currentId);
+      if (obj) {
+        currentId = obj.connectionId;
+        continue;
+      }
+
+      // Check if it's a player
+      const player = playersMap.get(currentId);
+      if (player) {
+        currentId = player.connectionId;
+        continue;
+      }
+
+      // Dead end
+      return undefined;
+    }
+    return undefined;
+  };
 
   const handleDrop = (draggedId: string, targetId: string) => {
     setDragOverId(null);
     if (!draggedId || draggedId === targetId) return;
 
-    // Check for circular dependency:
-    // If targetId is a descendant of draggedId (i.e., draggedId is in the path of targetId), abort.
     const targetHierarchy = getHierarchyInfo(targetId);
-    if (targetHierarchy.path.some(p => p.id === draggedId)) {
-      alert("Cannot drop an object into its own child!");
+    if (targetHierarchy.path.includes(draggedId)) {
+      alert(`Cannot drop into its own descendant!`);
       return;
     }
 
-    const newObjects = [...data];
-    const index = newObjects.findIndex(o => o.id === draggedId);
-    if (index !== -1) {
-      newObjects[index] = { ...newObjects[index], connectionId: targetId };
-      onChange(newObjects);
-      if (onSave) onSave();
+    let isPlayer = false;
+    let draggedItem = data.find(o => o.id === draggedId);
+    if (!draggedItem) {
+      const draggedPlayer = players.find(p => p.id === draggedId);
+      if (draggedPlayer) {
+        isPlayer = true;
+        if (onUpdatePlayers) {
+          const newPlayers = [...players];
+          const pIndex = newPlayers.findIndex(p => p.id === draggedId);
+          if (pIndex !== -1) {
+            // Calculate locationId by traversing up from targetId
+            const rootLocationId = findRootLocation(targetId);
+            newPlayers[pIndex] = {
+              ...newPlayers[pIndex],
+              connectionId: targetId,
+              locationId: rootLocationId
+            };
+            onUpdatePlayers(newPlayers);
+          }
+        }
+      }
+    } else {
+      const newObjects = [...data];
+      const oIndex = newObjects.findIndex(o => o.id === draggedId);
+      if (oIndex !== -1) {
+        newObjects[oIndex] = { ...newObjects[oIndex], connectionId: targetId };
+        onChange(newObjects);
+      }
     }
+    if (onSave) setTimeout(onSave, 100);
   };
 
-  // Рекурсивная функция для рендеринга объекта и его вложенных объектов
-  const renderObjectWithChildren = (item: ObjectData, depth: number = 0) => {
-    const originalIndex = data.findIndex(obj => obj.id === item.id);
-    const children = getChildren(item.id);
-    const sortedChildren = sortObjects(children);
+  const renderEntity = (item: { type: 'object' | 'player', data: ObjectData | PlayerData }, depth: number = 0) => {
+    const isPlayer = item.type === 'player';
+    const id = item.data.id;
+    const name = item.data.name;
+    const children = getChildren(id);
+    const sortedChildren = sortEntities(children);
 
-    // Функция для корректного удаления объекта с обработкой вложенных объектов
     const handleDelete = () => {
-      // NOTE: deleteObjectWithChildren is imported from '../utils/gameUtils' at the top of the file
-      // Make sure it is available. If not, we might need to check imports.
-      // Based on file read, it was imported on line 3.
-      const newObjects = deleteObjectWithChildren(data, item.id, locations, players);
-      onChange(newObjects);
+      if (isPlayer) {
+        if (confirm(`Delete player ${name}?`)) {
+          if (onUpdatePlayers) onUpdatePlayers(players.filter(p => p.id !== id));
+        }
+      } else {
+        const newObjects = deleteObjectWithChildren(data, id, locations, players);
+        onChange(newObjects);
+      }
       if (onSave) onSave();
     };
 
-    const isDragOver = dragOverId === item.id;
+    const isDragOver = dragOverId === id;
     const hasChildren = sortedChildren.length > 0;
-    const isCollapsed = collapsedIds.has(item.id);
+    const isCollapsed = collapsedIds.has(id);
+
+    const renderEditor = () => {
+      if (isPlayer) {
+        const p = item.data as PlayerData;
+        return (
+          <div>
+            <div className="flex gap-2 mb-2">
+              <div className="bg-purple-900/40 text-purple-200 text-[10px] px-2 py-0.5 rounded border border-purple-500/30 font-bold uppercase tracking-wider">
+                👤 Player
+              </div>
+            </div>
+            <InputField
+              label="Name"
+              value={p.name}
+              onChange={(v: string) => {
+                if (!onUpdatePlayers) return;
+                const newP = [...players];
+                const idx = newP.findIndex(x => x.id === id);
+                if (idx !== -1) { newP[idx].name = v; onUpdatePlayers(newP); }
+              }}
+              onSave={onSave}
+            />
+            <InputField
+              label="ID"
+              value={p.id}
+              onChange={(v: string) => {
+                if (!onUpdatePlayers) return;
+                const newP = [...players];
+                const idx = newP.findIndex(x => x.id === id);
+                if (idx !== -1) { newP[idx].id = v; onUpdatePlayers(newP); }
+              }}
+              onSave={onSave}
+            />
+            <HierarchySelect
+              label="Connected To"
+              value={p.connectionId}
+              onChange={(v: string) => {
+                if (!onUpdatePlayers) return;
+                const newP = [...players];
+                const idx = newP.findIndex(x => x.id === id);
+                if (idx !== -1) { newP[idx].connectionId = v; onUpdatePlayers(newP); }
+              }}
+              options={hierarchyOptions.filter(opt => opt.id !== id)}
+            />
+          </div>
+        );
+      } else {
+        const o = item.data as ObjectData;
+        return (
+          <>
+            <InputField
+              label="Name"
+              value={o.name}
+              onChange={(v: string) => {
+                const newO = [...data];
+                const idx = newO.findIndex(x => x.id === id);
+                if (idx !== -1) { newO[idx].name = v; onChange(newO); }
+              }}
+              onSave={onSave}
+            />
+            <InputField
+              label="ID"
+              value={o.id}
+              onChange={(v: string) => {
+                const newO = [...data];
+                const idx = newO.findIndex(x => x.id === id);
+                if (idx !== -1) { newO[idx].id = v; onChange(newO); }
+              }}
+              onSave={onSave}
+            />
+            <AttributesEditor
+              attributes={o.attributes || {}}
+              onChange={(attrs) => {
+                const newO = [...data];
+                const idx = newO.findIndex(x => x.id === id);
+                if (idx !== -1) { newO[idx].attributes = attrs; onChange(newO); }
+              }}
+              onSave={onSave}
+            />
+            <HierarchySelect
+              label="Connected To"
+              value={o.connectionId}
+              onChange={(v: string) => {
+                const newO = [...data];
+                const idx = newO.findIndex(x => x.id === id);
+                if (idx !== -1) { newO[idx].connectionId = v; onChange(newO); }
+              }}
+              options={hierarchyOptions.filter(opt => opt.id !== id)}
+              placeholder="Выберите владельца/контейнер..."
+            />
+          </>
+        );
+      }
+    };
 
     return (
       <div
-        key={item.id}
-        className={`${depth > 0 ? `ml-4 border-l-2 ${isDragOver ? 'border-purple-500 bg-purple-900/20' : 'border-gray-700'} pl-2` : isDragOver ? 'bg-purple-900/20 rounded' : ''} transition-colors duration-200`}
+        key={id}
+        className={`${depth > 0 ? `ml-4 border-l-2 ${isDragOver ? 'border-purple-500 bg-purple-900/20' : 'border-gray-700'} pl-2` : isDragOver ? 'bg-purple-900/20 rounded' : ''} transition-colors duration-200 mt-1`}
         draggable
         onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', item.id);
+          e.dataTransfer.setData('text/plain', id);
           e.stopPropagation();
         }}
         onDragOver={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          setDragOverId(item.id);
+          setDragOverId(id);
         }}
         onDragLeave={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (dragOverId === item.id) setDragOverId(null);
+          if (dragOverId === id) setDragOverId(null);
         }}
         onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
           const draggedId = e.dataTransfer.getData('text/plain');
-          handleDrop(draggedId, item.id);
+          handleDrop(draggedId, id);
         }}
       >
         <div className="flex items-start gap-1">
-          {hasChildren && (
+          {hasChildren ? (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); toggleCollapse(item.id); }}
+              onClick={(e) => { e.stopPropagation(); toggleCollapse(id); }}
               className="mt-2 w-4 h-4 flex-shrink-0 flex items-center justify-center text-[10px] text-gray-400 hover:text-white bg-gray-900 border border-gray-700 rounded transition-colors"
             >
               {isCollapsed ? '▶' : '▼'}
             </button>
+          ) : (
+            <div className="w-4 flex-shrink-0" />
           )}
+
           <div className="flex-1 min-w-0">
-            <ListItem id={item.id} name={item.name} onDelete={handleDelete}>
-              <InputField label="Name" value={item.name} onChange={(v: string) => { const n = [...data]; n[originalIndex].name = v; onChange(n); }} onSave={onSave} />
-              <InputField label="ID" value={item.id} onChange={(v: string) => { const n = [...data]; n[originalIndex].id = v; onChange(n); }} onSave={onSave} />
-              <AttributesEditor attributes={item.attributes || {}} onChange={(attrs) => { const n = [...data]; n[originalIndex].attributes = attrs; onChange(n); }} onSave={onSave} />
-              <HierarchySelect
-                label="Connected To"
-                value={item.connectionId}
-                onChange={(v: string) => { const n = [...data]; n[originalIndex].connectionId = v; onChange(n); }}
-                options={hierarchyOptions.filter(opt => opt.id !== item.id)}
-                placeholder="Выберите владельца/контейнер..."
-              />
+            <ListItem id={id} name={`${isPlayer ? '👤 ' : '📦 '}${name}`} onDelete={handleDelete}>
+              {renderEditor()}
             </ListItem>
 
-            {/* Рекурсивно рендерим дочерние объекты если не свернуто */}
             {hasChildren && !isCollapsed && (
               <div className="mt-1">
-                {sortedChildren.map(child => renderObjectWithChildren(child, depth + 1))}
+                {sortedChildren.map(child => renderEntity(child, depth + 1))}
               </div>
             )}
           </div>
@@ -843,25 +960,21 @@ export const ObjectsEditor: React.FC<{
 
   return (
     <div className="relative">
-      {/* Фиксированная кнопка сверху */}
       <div className="sticky top-0 z-10 p-4 pb-2 bg-gray-900/50 backdrop-blur-sm border-b border-gray-800">
         <button type="button" onClick={add} className="w-full py-1 border border-gray-700 text-gray-400 text-xs rounded hover:bg-gray-800">+ NEW OBJECT</button>
       </div>
 
-      {/* Контент с отступом */}
       <div className="p-4 pt-2">
-        {/* Объекты без связи - в начале */}
-        {sortedUngroupedObjects.length > 0 && (
+        {sortedUngrouped.length > 0 && (
           <div className="mb-4">
             <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">
-              📦 Без связи
+              📦/👤 Без связи / В корне
             </div>
-            {sortedUngroupedObjects.map(obj => renderObjectWithChildren(obj, 0))}
+            {sortedUngrouped.map(item => renderEntity(item, 0))}
           </div>
         )}
 
-        {/* Группы по Connected To */}
-        {sortedGroups.map(({ id: connectionId, name: connectionName, icon, objects }) => {
+        {displayGroups.map(({ id: connectionId, name: connectionName, icon, items }) => {
           const isGroupDragOver = dragOverId === connectionId;
           const isGroupCollapsed = collapsedIds.has(connectionId);
 
@@ -886,11 +999,10 @@ export const ObjectsEditor: React.FC<{
               >
                 <span className="text-purple-400 text-[10px]">{isGroupCollapsed ? '▶' : '▼'}</span>
                 <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider pointer-events-none">
-                  {icon} {connectionName} <span className="text-gray-600 ml-1">({objects.length})</span>
+                  {icon} {connectionName} <span className="text-gray-600 ml-1">({items.length})</span>
                 </div>
               </div>
-
-              {!isGroupCollapsed && objects.map(obj => renderObjectWithChildren(obj, 0))}
+              {!isGroupCollapsed && items.map(item => renderEntity(item, 0))}
             </div>
           );
         })}

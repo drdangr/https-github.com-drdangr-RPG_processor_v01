@@ -35,10 +35,8 @@ export interface PlayerData {
   id: string;
   name: string;
   description: string;
-  inventory: string[]; // Array of Object IDs
-  health: number;
-  state: string; // e.g., "drunk", "tired"
   connectionId: string; // Unified location tracking (Location ID, Object ID, etc.)
+  locationId?: string; // Root location ID (calculated)
   attributes?: Record<string, string>;
 }
 
