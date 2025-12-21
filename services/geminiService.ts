@@ -178,7 +178,413 @@ const getThoughtParts = (response: GeminiApiResponse): string[] => {
     .filter(Boolean);
 };
 
+/**
+ * Парсит системную инструкцию на подразделы
+ */
+const parseSystemInstruction = (systemInstruction: string): {
+  basePrompt?: string;
+  worldState?: string;
+  locationContext?: string;
+  historySection?: string;
+} => {
+  const result: any = {};
+  
+  // Ищем "ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):"
+  // Останавливаемся на "ТЕКУЩАЯ ЛОКАЦИЯ", "ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ", "ДОСТУПНЫЕ ОБЪЕКТЫ ДЛЯ РАЗМЕТКИ" или конце строки
+  const worldStateMatch = systemInstruction.match(/ТЕКУЩЕЕ СОСТОЯНИЕ МИРА \(JSON\):([\s\S]*?)(?=ТЕКУЩАЯ ЛОКАЦИЯ|ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ|ДОСТУПНЫЕ ОБЪЕКТЫ ДЛЯ РАЗМЕТКИ|$)/);
+  if (worldStateMatch) {
+    result.worldState = worldStateMatch[1].trim();
+    // Базовый промпт - все до "ТЕКУЩЕЕ СОСТОЯНИЕ МИРА"
+    const beforeWorldState = systemInstruction.substring(0, systemInstruction.indexOf('ТЕКУЩЕЕ СОСТОЯНИЕ МИРА'));
+    if (beforeWorldState.trim()) {
+      result.basePrompt = beforeWorldState.trim();
+    }
+  } else {
+    // Если нет раздела с состоянием мира, весь текст - базовый промпт
+    result.basePrompt = systemInstruction;
+  }
+  
+  // Ищем "ТЕКУЩАЯ ЛОКАЦИЯ"
+  // Останавливаемся на "ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ", "ДОСТУПНЫЕ ОБЪЕКТЫ ДЛЯ РАЗМЕТКИ" или конце строки
+  const locationMatch = systemInstruction.match(/ТЕКУЩАЯ ЛОКАЦИЯ \(ГДЕ НАХОДИТСЯ ИГРОК\):([\s\S]*?)(?=ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ|ДОСТУПНЫЕ ОБЪЕКТЫ ДЛЯ РАЗМЕТКИ|$)/);
+  if (locationMatch) {
+    result.locationContext = locationMatch[1].trim();
+  }
+  
+  // Ищем "ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ"
+  const historyMatch = systemInstruction.match(/ИСТОРИЯ ПОСЛЕДНИХ ХОДОВ[^:]*:([\s\S]*?)$/);
+  if (historyMatch) {
+    result.historySection = historyMatch[1].trim();
+  }
+  
+  return result;
+};
 
+/**
+ * Создает размеченный лог всех компонентов, отправляемых в LLM
+ * Использует структурированную разметку с уникальными ID для каждого блока
+ */
+const createMarkedPromptLog = (
+  systemInstruction: string,
+  tools: Tool[],
+  userPrompt: string,
+  conversationHistory?: Content[],
+  settings?: {
+    temperature?: number;
+    modelId?: string;
+    thinkingBudget?: number;
+    includeConnectedLocationObjects?: boolean;
+    compactConnectedLocationObjects?: boolean;
+  }
+): string => {
+  const MARKER_START = '<<<';
+  const MARKER_END = '>>>';
+  const BLOCK_SEPARATOR = '---';
+  
+  // Парсим системную инструкцию на подразделы
+  const systemParts = parseSystemInstruction(systemInstruction);
+  
+  let log = '\n';
+  log += `${MARKER_START}BLOCK:REQUEST_LOG${MARKER_END}\n\n`;
+
+  // Настройки запроса
+  if (settings) {
+    log += `${MARKER_START}BLOCK:SETTINGS${MARKER_END}\n`;
+    log += `Модель: ${settings.modelId || 'не указана'}\n`;
+    log += `Температура: ${settings.temperature ?? 'не указана'}\n`;
+    log += `Thinking Budget: ${settings.thinkingBudget ?? 'не указан'}\n`;
+    log += `Объекты в соседних локациях: ${settings.includeConnectedLocationObjects ? 'ON' : 'OFF'}\n`;
+    log += `Соседние объекты компактно: ${settings.compactConnectedLocationObjects ? 'ON' : 'OFF'}\n`;
+    log += `${MARKER_START}ENDBLOCK:SETTINGS${MARKER_END}\n\n`;
+  }
+
+  // Системная инструкция - разбиваем на подразделы
+  log += `${MARKER_START}BLOCK:SYSTEM_INSTRUCTION${MARKER_END}\n`;
+  
+  // Базовый промпт
+  if (systemParts.basePrompt) {
+    log += `${MARKER_START}SUBBLOCK:BASE_PROMPT${MARKER_END}\n`;
+    log += systemParts.basePrompt;
+    log += `\n${MARKER_START}ENDSUBBLOCK:BASE_PROMPT${MARKER_END}\n\n`;
+  }
+  
+  // Состояние мира (JSON)
+  if (systemParts.worldState) {
+    log += `${MARKER_START}SUBBLOCK:WORLD_STATE${MARKER_END}\n`;
+    log += `ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):\n${systemParts.worldState}`;
+    log += `\n${MARKER_START}ENDSUBBLOCK:WORLD_STATE${MARKER_END}\n\n`;
+  }
+  
+  // Контекст локации
+  if (systemParts.locationContext) {
+    log += `${MARKER_START}SUBBLOCK:LOCATION_CONTEXT${MARKER_END}\n`;
+    log += systemParts.locationContext;
+    log += `\n${MARKER_START}ENDSUBBLOCK:LOCATION_CONTEXT${MARKER_END}\n\n`;
+  }
+  
+  // История ходов
+  if (systemParts.historySection) {
+    log += `${MARKER_START}SUBBLOCK:HISTORY_SECTION${MARKER_END}\n`;
+    log += systemParts.historySection;
+    log += `\n${MARKER_START}ENDSUBBLOCK:HISTORY_SECTION${MARKER_END}\n\n`;
+  }
+  
+  // Если системная инструкция не была распарсена, выводим целиком
+  if (!systemParts.basePrompt && !systemParts.worldState) {
+    log += systemInstruction;
+  }
+  
+  log += `${MARKER_START}ENDBLOCK:SYSTEM_INSTRUCTION${MARKER_END}\n\n`;
+
+  // Описание инструментов
+  log += `${MARKER_START}BLOCK:TOOLS${MARKER_END}\n`;
+  if (tools.length > 0 && tools[0].functionDeclarations) {
+    const toolDefs = tools[0].functionDeclarations;
+    toolDefs.forEach((tool, index) => {
+      log += `${MARKER_START}SUBBLOCK:TOOL_${index + 1}${MARKER_END}\n`;
+      log += `Имя: ${tool.name}\n`;
+      log += `Описание: ${tool.description || '(нет описания)'}\n`;
+      if (tool.parameters) {
+        log += `Параметры:\n${JSON.stringify(tool.parameters, null, 2)}\n`;
+      }
+      log += `${MARKER_START}ENDSUBBLOCK:TOOL_${index + 1}${MARKER_END}\n\n`;
+    });
+  } else {
+    log += '(нет инструментов)\n';
+  }
+  log += `${MARKER_START}ENDBLOCK:TOOLS${MARKER_END}\n\n`;
+
+  // История разговора (если есть)
+  if (conversationHistory && conversationHistory.length > 0) {
+    log += `${MARKER_START}BLOCK:CONVERSATION_HISTORY${MARKER_END}\n`;
+    conversationHistory.forEach((content, index) => {
+      log += `${MARKER_START}SUBBLOCK:MESSAGE_${index + 1}${MARKER_END}\n`;
+      log += `Роль: ${content.role}\n`;
+      if (content.parts && content.parts.length > 0) {
+        content.parts.forEach((part, partIndex) => {
+          if (part.text) {
+            log += `[Часть ${partIndex + 1} - Текст]\n${part.text}\n`;
+          }
+          if (part.functionCall) {
+            log += `[Часть ${partIndex + 1} - Вызов функции]\n${JSON.stringify(part.functionCall, null, 2)}\n`;
+          }
+          if (part.functionResponse) {
+            log += `[Часть ${partIndex + 1} - Ответ функции]\n${JSON.stringify(part.functionResponse, null, 2)}\n`;
+          }
+        });
+      }
+      log += `${MARKER_START}ENDSUBBLOCK:MESSAGE_${index + 1}${MARKER_END}\n\n`;
+    });
+    log += `${MARKER_START}ENDBLOCK:CONVERSATION_HISTORY${MARKER_END}\n\n`;
+  }
+
+  // Запрос пользователя
+  log += `${MARKER_START}BLOCK:USER_PROMPT${MARKER_END}\n`;
+  log += userPrompt;
+  log += `\n${MARKER_START}ENDBLOCK:USER_PROMPT${MARKER_END}\n`;
+
+  log += `\n${MARKER_START}ENDBLOCK:REQUEST_LOG${MARKER_END}\n\n`;
+  return log;
+};
+
+/**
+ * Создает размеченный лог для запроса нарратива к LLM
+ */
+const createMarkedNarrativeLog = (
+  systemInstruction: string,
+  userPrompt: string,
+  toolsSummary: string,
+  simulationContext: string,
+  narrativeInstruction: string,
+  settings?: {
+    temperature?: number;
+    modelId?: string;
+    thinkingBudget?: number;
+  }
+): string => {
+  const MARKER_START = '<<<';
+  const MARKER_END = '>>>';
+  
+  // Парсим системную инструкцию на подразделы
+  const systemParts = parseSystemInstruction(systemInstruction);
+  
+  let log = '\n';
+  log += `${MARKER_START}BLOCK:REQUEST_LOG${MARKER_END}\n\n`;
+
+  // Настройки запроса
+  if (settings) {
+    log += `${MARKER_START}BLOCK:SETTINGS${MARKER_END}\n`;
+    log += `Модель: ${settings.modelId || 'не указана'}\n`;
+    log += `Температура: ${settings.temperature ?? 'не указана'}\n`;
+    log += `Thinking Budget: ${settings.thinkingBudget ?? 'не указан'}\n`;
+    log += `${MARKER_START}ENDBLOCK:SETTINGS${MARKER_END}\n\n`;
+  }
+
+  // Системная инструкция - разбиваем на подразделы
+  log += `${MARKER_START}BLOCK:SYSTEM_INSTRUCTION${MARKER_END}\n`;
+  
+  // Базовый промпт
+  if (systemParts.basePrompt) {
+    log += `${MARKER_START}SUBBLOCK:BASE_PROMPT${MARKER_END}\n`;
+    log += systemParts.basePrompt;
+    log += `\n${MARKER_START}ENDSUBBLOCK:BASE_PROMPT${MARKER_END}\n\n`;
+  }
+  
+  // Состояние мира (JSON)
+  if (systemParts.worldState) {
+    log += `${MARKER_START}SUBBLOCK:WORLD_STATE${MARKER_END}\n`;
+    log += `ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):\n${systemParts.worldState}`;
+    log += `\n${MARKER_START}ENDSUBBLOCK:WORLD_STATE${MARKER_END}\n\n`;
+  }
+  
+  // Контекст локации
+  if (systemParts.locationContext) {
+    log += `${MARKER_START}SUBBLOCK:LOCATION_CONTEXT${MARKER_END}\n`;
+    log += systemParts.locationContext;
+    log += `\n${MARKER_START}ENDSUBBLOCK:LOCATION_CONTEXT${MARKER_END}\n\n`;
+  }
+  
+  // История ходов
+  if (systemParts.historySection) {
+    log += `${MARKER_START}SUBBLOCK:HISTORY_SECTION${MARKER_END}\n`;
+    log += systemParts.historySection;
+    log += `\n${MARKER_START}ENDSUBBLOCK:HISTORY_SECTION${MARKER_END}\n\n`;
+  }
+  
+  // Если системная инструкция не была распарсена, выводим целиком
+  if (!systemParts.basePrompt && !systemParts.worldState) {
+    log += systemInstruction;
+  }
+  
+  log += `${MARKER_START}ENDBLOCK:SYSTEM_INSTRUCTION${MARKER_END}\n\n`;
+
+  // Запрос пользователя (состоит из нескольких частей)
+  log += `${MARKER_START}BLOCK:USER_PROMPT${MARKER_END}\n`;
+  
+  // Исходный запрос игрока
+  if (userPrompt) {
+    log += `${MARKER_START}SUBBLOCK:PLAYER_INPUT${MARKER_END}\n`;
+    log += userPrompt;
+    log += `\n${MARKER_START}ENDSUBBLOCK:PLAYER_INPUT${MARKER_END}\n\n`;
+  }
+  
+  // Сводка выполненных инструментов
+  if (toolsSummary) {
+    log += `${MARKER_START}SUBBLOCK:TOOLS_SUMMARY${MARKER_END}\n`;
+    log += toolsSummary;
+    log += `\n${MARKER_START}ENDSUBBLOCK:TOOLS_SUMMARY${MARKER_END}\n\n`;
+  }
+  
+  // Контекст рассуждений симуляции
+  if (simulationContext) {
+    log += `${MARKER_START}SUBBLOCK:SIMULATION_CONTEXT${MARKER_END}\n`;
+    log += simulationContext;
+    log += `\n${MARKER_START}ENDSUBBLOCK:SIMULATION_CONTEXT${MARKER_END}\n\n`;
+  }
+  
+  // Инструкция для нарратива
+  if (narrativeInstruction) {
+    log += `${MARKER_START}SUBBLOCK:NARRATIVE_INSTRUCTION${MARKER_END}\n`;
+    log += narrativeInstruction;
+    log += `\n${MARKER_START}ENDSUBBLOCK:NARRATIVE_INSTRUCTION${MARKER_END}\n\n`;
+  }
+  
+  log += `${MARKER_START}ENDBLOCK:USER_PROMPT${MARKER_END}\n`;
+
+  log += `\n${MARKER_START}ENDBLOCK:REQUEST_LOG${MARKER_END}\n\n`;
+  return log;
+};
+
+/**
+ * Парсит размеченный лог обратно на компоненты
+ * Возвращает структурированные данные с блоками и подблоками
+ */
+export const parseMarkedPromptLog = (markedLog: string): {
+  blocks?: Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }>;
+  systemInstruction?: string;
+  tools?: any[];
+  userPrompt?: string;
+  conversationHistory?: Content[];
+  settings?: any;
+} => {
+  const result: any = {};
+  const MARKER_START = '<<<';
+  const MARKER_END = '>>>';
+  
+  // Извлекаем все блоки
+  const blockRegex = new RegExp(`${MARKER_START}(BLOCK|SUBBLOCK):([^${MARKER_END}]+)${MARKER_END}([\\s\\S]*?)${MARKER_START}END(?:BLOCK|SUBBLOCK):([^${MARKER_END}]+)${MARKER_END}`, 'g');
+  const blocks: any[] = [];
+  let match;
+  
+  while ((match = blockRegex.exec(markedLog)) !== null) {
+    const type = match[1] === 'BLOCK' ? 'block' : 'subblock';
+    const id = match[2];
+    const content = match[3].trim();
+    const endId = match[4];
+    
+    if (id === endId) {
+      blocks.push({
+        id,
+        type,
+        content
+      });
+    }
+  }
+  
+  result.blocks = blocks;
+  
+  // Извлекаем конкретные блоки для обратной совместимости
+  const getBlockContent = (blockId: string): string | undefined => {
+    const block = blocks.find(b => b.id === blockId && b.type === 'block');
+    return block?.content;
+  };
+  
+  const getSubblockContent = (blockId: string, subblockId: string): string | undefined => {
+    // Ищем блок, затем подблок внутри него
+    const blockStart = markedLog.indexOf(`<<<BLOCK:${blockId}>>>`);
+    if (blockStart === -1) return undefined;
+    const blockEnd = markedLog.indexOf(`<<<ENDBLOCK:${blockId}>>>`, blockStart);
+    if (blockEnd === -1) return undefined;
+    const blockContent = markedLog.substring(blockStart, blockEnd);
+    const subblockMatch = blockContent.match(new RegExp(`<<<SUBBLOCK:${subblockId}>>>([\\s\\S]*?)<<<ENDSUBBLOCK:${subblockId}>>>`));
+    return subblockMatch ? subblockMatch[1].trim() : undefined;
+  };
+  
+  // Настройки
+  const settingsContent = getBlockContent('SETTINGS');
+  if (settingsContent) {
+    result.settings = {};
+    const modelMatch = settingsContent.match(/Модель: (.+)/);
+    const tempMatch = settingsContent.match(/Температура: (.+)/);
+    const thinkingMatch = settingsContent.match(/Thinking Budget: (.+)/);
+    if (modelMatch) result.settings.modelId = modelMatch[1].trim();
+    if (tempMatch) {
+      const temp = tempMatch[1].trim();
+      result.settings.temperature = temp === 'не указана' ? undefined : parseFloat(temp);
+    }
+    if (thinkingMatch) {
+      const thinking = thinkingMatch[1].trim();
+      result.settings.thinkingBudget = thinking === 'не указан' ? undefined : parseFloat(thinking);
+    }
+  }
+  
+  // Системная инструкция (собираем из подблоков)
+  const systemBlock = getBlockContent('SYSTEM_INSTRUCTION');
+  if (systemBlock) {
+    const basePrompt = getSubblockContent('SYSTEM_INSTRUCTION', 'BASE_PROMPT');
+    const worldState = getSubblockContent('SYSTEM_INSTRUCTION', 'WORLD_STATE');
+    const locationContext = getSubblockContent('SYSTEM_INSTRUCTION', 'LOCATION_CONTEXT');
+    const historySection = getSubblockContent('SYSTEM_INSTRUCTION', 'HISTORY_SECTION');
+    
+    result.systemInstruction = systemBlock;
+    if (basePrompt) result.basePrompt = basePrompt;
+    if (worldState) result.worldState = worldState;
+    if (locationContext) result.locationContext = locationContext;
+    if (historySection) result.historySection = historySection;
+  }
+  
+  // Инструменты
+  const toolsContent = getBlockContent('TOOLS');
+  if (toolsContent && toolsContent !== '(нет инструментов)') {
+    result.tools = [];
+    const toolRegex = /<<<SUBBLOCK:TOOL_(\d+)>>>([\s\S]*?)<<<ENDSUBBLOCK:TOOL_\d+>>>/g;
+    let toolMatch;
+    while ((toolMatch = toolRegex.exec(toolsContent)) !== null) {
+      const toolText = toolMatch[2];
+      const nameMatch = toolText.match(/Имя: ([^\n]+)/);
+      const descMatch = toolText.match(/Описание: ([^\n]+)/);
+      const paramsMatch = toolText.match(/Параметры:\n([\s\S]*?)(?=\n|$)/);
+      
+      const tool: any = {};
+      if (nameMatch) tool.name = nameMatch[1].trim();
+      if (descMatch) tool.description = descMatch[1].trim();
+      if (paramsMatch) {
+        try {
+          tool.parameters = JSON.parse(paramsMatch[1].trim());
+        } catch (e) {
+          tool.parameters = paramsMatch[1].trim();
+        }
+      }
+      result.tools.push(tool);
+    }
+  } else {
+    result.tools = [];
+  }
+  
+  // Запрос пользователя
+  const userPromptContent = getBlockContent('USER_PROMPT');
+  if (userPromptContent) {
+    result.userPrompt = userPromptContent;
+  }
+  
+  // История разговора
+  const historyContent = getBlockContent('CONVERSATION_HISTORY');
+  if (historyContent) {
+    result.conversationHistory = [];
+  }
+  
+  return result;
+};
 
 export const processGameTurn = async (
   currentState: GameState,
@@ -229,50 +635,70 @@ export const processGameTurn = async (
         return normalizedState;
       }
 
-      // Берем первого игрока (обычно он один)
-      const player = normalizedState.players[0];
-      const playerLocation = normalizedState.locations.find(l => l.id === player.locationId);
+      // В симуляции передаём ВСЕХ игроков полностью (исходная архитектура: общий ход и общий ответ)
+      const players = normalizedState.players;
 
-      if (!playerLocation) {
-        console.warn("[Service] Player location not found, returning full state");
+      // Локации, где находятся игроки (полные, с описанием/ситуацией)
+      const playerLocationIds = Array.from(
+        new Set(players.map(p => p.locationId).filter(Boolean))
+      );
+      const playerLocations = normalizedState.locations.filter(l => playerLocationIds.includes(l.id));
+
+      // Если хоть одна локация игрока не найдена — безопасно откатываемся на полное состояние
+      if (playerLocations.length !== playerLocationIds.length) {
+        console.warn("[Service] One or more player locations not found, returning full state");
         return normalizedState;
       }
 
-      // Находим соседние локации (для понимания доступных переходов)
+      // Соседние локации (для навигации/доступных переходов)
       const connectedLocationIds = new Set<string>();
-      playerLocation.connections.forEach(conn => {
-        connectedLocationIds.add(conn.targetLocationId);
-      });
+      for (const loc of playerLocations) {
+        loc.connections.forEach(conn => connectedLocationIds.add(conn.targetLocationId));
+      }
+      // Не включаем локации игроков как "соседние"
+      for (const id of playerLocationIds) connectedLocationIds.delete(id);
 
-      // Создаем компактные версии соседних локаций (только ID, name и connections)
+      // Компактные версии соседних локаций (без описаний/ситуации/атрибутов)
       const connectedLocations = normalizedState.locations
         .filter(loc => connectedLocationIds.has(loc.id))
         .map(loc => ({
           id: loc.id,
           name: loc.name,
-          description: "", // Убираем описание для экономии токенов
-          currentSituation: "", // Убираем текущую ситуацию
-          state: loc.state, // Оставляем состояние (важно для навигации, например "locked")
-          connections: loc.connections, // Оставляем connections для навигации
-          attributes: {} // Убираем атрибуты
+          description: "", // экономия токенов
+          currentSituation: "", // экономия токенов
+          state: loc.state, // важно для навигации, например "locked"
+          connections: loc.connections,
+          attributes: {} // экономия токенов
         }));
 
-      // Находим объекты в текущей локации и у игрока
+      // Релевантные локации для объектов:
+      // - локации игроков (полные)
+      // - соседние локации (для контекста и осознанного перемещения)
+      const includeConnectedLocationObjects = !!settings.includeConnectedLocationObjects;
+      const compactConnectedLocationObjects = !!settings.compactConnectedLocationObjects;
+      const relevantLocationIdsForObjects = new Set<string>(playerLocationIds);
+      if (includeConnectedLocationObjects) {
+        Array.from(connectedLocationIds).forEach(id => relevantLocationIdsForObjects.add(id));
+      }
+
+      // Собираем релевантные объекты:
+      // - объекты в релевантных локациях (локации игроков + соседние)
+      // - объекты "у игроков" (инвентарь/контейнеры на игроке)
       const relevantObjectIds = new Set<string>();
+      // Множество объектов, которые относятся к "соседнему" контексту (для компактного режима)
+      const connectedContextObjectIds = new Set<string>();
 
-      // Объекты в локации
       normalizedState.objects
-        .filter(obj => obj.connectionId === playerLocation.id)
-        .forEach(obj => relevantObjectIds.add(obj.id));
+        .filter(obj => relevantLocationIdsForObjects.has(obj.connectionId))
+        .forEach(obj => {
+          relevantObjectIds.add(obj.id);
+          if (connectedLocationIds.has(obj.connectionId)) {
+            connectedContextObjectIds.add(obj.id);
+          }
+        });
 
-      // Объекты у игрока
       normalizedState.objects
-        .filter(obj => obj.connectionId === player.id)
-        .forEach(obj => relevantObjectIds.add(obj.id));
-
-      // Объекты в соседних локациях (для понимания контекста, но без деталей)
-      normalizedState.objects
-        .filter(obj => connectedLocationIds.has(obj.connectionId))
+        .filter(obj => players.some(p => p.id === obj.connectionId))
         .forEach(obj => relevantObjectIds.add(obj.id));
 
       // Рекурсивно находим объекты внутри релевантных объектов (контейнеры)
@@ -282,27 +708,36 @@ export const processGameTurn = async (
           .forEach(obj => {
             if (!relevantObjectIds.has(obj.id)) {
               relevantObjectIds.add(obj.id);
-              findNestedObjects(obj.id); // Рекурсивно ищем вложенные объекты
+              // Если родительский объект относится к "соседнему" контексту — наследуем это для вложенных
+              if (connectedContextObjectIds.has(parentId)) {
+                connectedContextObjectIds.add(obj.id);
+              }
+              findNestedObjects(obj.id);
             }
           });
       };
+      Array.from(relevantObjectIds).forEach(objId => findNestedObjects(objId));
 
-      // Находим вложенные объекты для всех релевантных объектов
-      Array.from(relevantObjectIds).forEach(objId => {
-        findNestedObjects(objId);
-      });
+      const relevantObjectsRaw = normalizedState.objects.filter(obj => relevantObjectIds.has(obj.id));
 
-      const relevantObjects = normalizedState.objects.filter(obj => relevantObjectIds.has(obj.id));
+      // Компактируем объекты из соседних локаций (и вложенные в них), если включено
+      const relevantObjects = (!includeConnectedLocationObjects || !compactConnectedLocationObjects)
+        ? relevantObjectsRaw
+        : relevantObjectsRaw.map(obj => {
+          if (!connectedContextObjectIds.has(obj.id)) return obj;
+          return {
+            ...obj,
+            description: "",
+            attributes: {}
+          };
+        });
 
-      // Возвращаем компактное состояние
       return {
-        world: normalizedState.world, // Мир всегда нужен
-        locations: [
-          playerLocation, // Текущая локация с полным описанием
-          ...connectedLocations // Соседние локации в компактном виде
-        ],
-        players: [player], // Только текущий игрок
-        objects: relevantObjects // Только релевантные объекты
+        world: normalizedState.world,
+        // Полные локации игроков + компактные соседние
+        locations: [...playerLocations, ...connectedLocations],
+        players,
+        objects: relevantObjects
       };
     };
 
@@ -465,22 +900,31 @@ export const processGameTurn = async (
         const recentHistory = history.slice(-3); // Последние 3 хода
         console.log(`[Service] Adding history to prompt: ${recentHistory.length} turns (out of ${history.length} total)`);
 
-        // [IMPROVEMENT Item 5] Добавляем подробную историю действий (toolLogs)
-        // Теперь нарратив видит не только прошлый рассказ, но и механические действия, которые к нему привели
-        const formatTurn = (turn: TurnHistory) => {
-          const actions = turn.toolLogs && turn.toolLogs.length > 0
-            ? turn.toolLogs.map(t => `- [${t.name}] Результат: ${t.result}`).join('\n')
-            : '(нет действий)';
-
-          return `Ход ${turn.turn}:\nИгрок: "${turn.userPrompt}"\nДействия:\n${actions}\nНарратив: "${turn.narrative}"`;
+        if (isFinalNarrative) {
+          // Для нарратора - передаём ТОЛЬКО нарративы предыдущих ходов для стилистической связности
+          // Не передаем toolLogs - это техническая информация, которая может испортить стиль
+          const formatTurnForNarrative = (turn: TurnHistory) => {
+            return `Ход ${turn.turn}:\nНарратив: "${turn.narrative}"`;
         };
 
-        if (isFinalNarrative) {
-          // Для нарратора - передаём последние нарративы для стилистической связности
-          historySection = `\n\nИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (для стилистической связности и контекста):\n${recentHistory.map(formatTurn).join('\n\n---\n\n')}\n`;
+          historySection = `\n\nИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (для стилистической связности):\n${recentHistory.map(formatTurnForNarrative).join('\n\n---\n\n')}\n`;
         } else {
-          // Для симуляции - передаём нарративы с разметкой для материализации объектов
-          historySection = `\n\nИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (для понимания контекста и материализации объектов):\n${recentHistory.map(formatTurn).join('\n\n---\n\n')}\n`;
+          // Для симуляции - передаём ТОЛЬКО вызовы инструментов (toolLogs), без нарратива
+          const formatTurnForSimulation = (turn: TurnHistory) => {
+            if (!turn.toolLogs || turn.toolLogs.length === 0) {
+              return `Ход ${turn.turn}:\nИгрок: "${turn.userPrompt}"\nДействия: (нет действий)`;
+            }
+            
+            // Форматируем только toolLogs с аргументами и результатами
+            const toolCalls = turn.toolLogs.map(t => {
+              const argsStr = JSON.stringify(t.args, null, 2);
+              return `- [${t.name}] Аргументы: ${argsStr}\n  Результат: ${t.result}`;
+            }).join('\n\n');
+            
+            return `Ход ${turn.turn}:\nИгрок: "${turn.userPrompt}"\nВызовы инструментов:\n${toolCalls}`;
+          };
+          
+          historySection = `\n\nИСТОРИЯ ПОСЛЕДНИХ ХОДОВ (вызовы инструментов):\n${recentHistory.map(formatTurnForSimulation).join('\n\n---\n\n')}\n`;
         }
       } else {
         console.log("[Service] No history available for this turn");
@@ -591,9 +1035,28 @@ ${JSON.stringify(normalizedState, null, 2)}${locationContext}${historySection}`;
     };
 
     // Actual call with retry AND timeout wrapper
+    // Создаем размеченный лог перед первым вызовом LLM
+    const systemInstruction = createSystemInstruction(workingState);
+    const markedPromptLog = createMarkedPromptLog(
+      systemInstruction,
+      geminiTools,
+      userPrompt,
+      conversationHistory.length > 0 ? conversationHistory : undefined,
+      {
+        modelId,
+        temperature: settings.temperature,
+        thinkingBudget: settings.thinkingBudget,
+        includeConnectedLocationObjects: settings.includeConnectedLocationObjects,
+        compactConnectedLocationObjects: settings.compactConnectedLocationObjects
+      }
+    );
+    
+    // Логируем размеченный промпт для точного отслеживания
+    console.log(markedPromptLog);
+
     let response = await withRetry(async () => {
       return await generateWithTimeout(modelId, conversationHistory, {
-        systemInstruction: createSystemInstruction(workingState),
+        systemInstruction: systemInstruction,
         tools: geminiTools,
         temperature: settings.temperature,
         thinkingConfig,
@@ -952,19 +1415,34 @@ ${locationsList}
     // Формируем контекст для нарратива: что произошло (лог инструментов)
     const hasToolActions = toolLogs.length > 0;
     const toolsSummary = hasToolActions
-      ? `\n\nВыполненные изменения в мире:\n${toolLogs.map(log => `- ${log.name}: ${log.result}`).join('\n')}`
+      ? `\n\nЧто произошло:\n${toolLogs.map(log => {
+          // Форматируем как события для лучшей читаемости
+          if (log.name === 'move_object') {
+            return `- Объект перемещен: ${log.result}`;
+          } else if (log.name === 'create_object') {
+            return `- Создан объект: ${log.result}`;
+          } else if (log.name === 'delete_object') {
+            return `- Объект удален: ${log.result}`;
+          } else if (log.name === 'move_player') {
+            return `- Игрок перемещен: ${log.result}`;
+          } else if (log.name === 'set_attribute') {
+            return `- Изменен атрибут: ${log.result}`;
+          } else if (log.name === 'delete_attribute') {
+            return `- Удален атрибут: ${log.result}`;
+          } else {
+            return `- ${log.name}: ${log.result}`;
+          }
+        }).join('\n')}`
       : '';
 
-    // Всегда передаем thinking симуляции в нарратив, если он есть
-    // Это помогает нарративу лучше понимать контекст и рассуждения модели
-    const simulationContext = simulationThinkingParts.length > 0
-      ? `\n\nРассуждения симуляции:\n${simulationThinkingParts.join('\n\n---\n\n')}`
-      : '';
+    // Не передаем thinking симуляции в нарратив - это внутренние рассуждения,
+    // которые могут испортить стиль нарратива и раскрыть механику игры
+    const simulationContext = '';
 
     // Разная инструкция в зависимости от того, были ли действия
     const narrativeInstruction = hasToolActions
-      ? 'Создай художественное описание того, что произошло в результате этих действий. Учитывай рассуждения симуляции выше (если они есть).'
-      : 'Создай художественное описание в ответ на запрос игрока. Учитывай рассуждения симуляции выше (если они есть). Опиши то, что он видит/слышит/чувствует, включая причины, почему действие не удалось (если применимо).';
+      ? 'Создай художественное описание того, что произошло в результате этих действий.'
+      : 'Создай художественное описание в ответ на запрос игрока. Опиши то, что он видит/слышит/чувствует, включая причины, почему действие не удалось (если применимо).';
 
     // Создаем новый контекст для нарратива (без истории инструментов)
     const narrativeContents: Content[] = [
@@ -985,6 +1463,20 @@ ${locationsList}
       promptPreview: narrativeSystemInstruction.substring(0, 200) + '...',
       toolsSummary: toolsSummary.substring(0, 200) + '...'
     });
+
+    // Создаем размеченный лог для нарратива
+    const narrativeMarkedPromptLog = createMarkedNarrativeLog(
+      narrativeSystemInstructionWithObjects,
+      userPrompt,
+      toolsSummary,
+      simulationContext,
+      narrativeInstruction,
+      {
+        modelId: narrativeModelId,
+        temperature: narrativeTemperature,
+        thinkingBudget: narrativeThinkingBudget
+      }
+    );
 
     // Final request (Narrative) with Retry and Timeout
     const finalResponse = await withRetry(async () => {
@@ -1127,6 +1619,8 @@ ${locationsList}
       thinking, // Для обратной совместимости
       simulationThinking,
       narrativeThinking,
+      markedPromptLog, // Размеченный лог первого запроса к LLM (симуляция)
+      narrativeMarkedPromptLog, // Размеченный лог второго запроса к LLM (нарратив)
       tokenUsage: totalTokenUsage.totalTokens > 0 ? {
         simulation: totalSimulationTokens,
         narrative: narrativeTokenUsage || { promptTokens: 0, candidatesTokens: 0, totalTokens: 0 },

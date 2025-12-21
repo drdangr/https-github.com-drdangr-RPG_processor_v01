@@ -72,6 +72,8 @@ export interface SimulationResult {
   thinking?: string;
   simulationThinking?: string;
   narrativeThinking?: string;
+  markedPromptLog?: string; // Размеченный лог первого запроса к LLM (симуляция)
+  narrativeMarkedPromptLog?: string; // Размеченный лог второго запроса к LLM (нарратив)
   tokenUsage?: {
     simulation: TokenUsage;
     narrative: TokenUsage | null;
@@ -94,6 +96,8 @@ export interface AISettings {
   maxIterations: number;
   temperature: number;
   thinkingBudget: number;
+  includeConnectedLocationObjects?: boolean; // включать объекты в соседних локациях (для планирования перемещений)
+  compactConnectedLocationObjects?: boolean; // если включено — объекты соседних локаций передаются без описаний/атрибутов
   systemPromptOverride?: string;
   systemPromptPresetId?: string;
   narrativePromptOverride?: string;
@@ -104,10 +108,13 @@ export interface AISettings {
 }
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
-  modelId: 'gemini-flash-latest',
+  modelId: 'gemini-2.5-flash',
   maxIterations: 5,
   temperature: 0.6,
-  thinkingBudget: 8192,
+  thinkingBudget: 4000,
+  includeConnectedLocationObjects: false,
+  compactConnectedLocationObjects: true,
+  systemPromptPresetId: 'preset_uber_v2',
   narrativeModelId: 'gemini-flash-lite-latest',
   narrativeTemperature: 0.8,
 };

@@ -42,6 +42,8 @@ const App: React.FC = () => {
   const [newPresetDescription, setNewPresetDescription] = useState('');
   const [newPresetPrompt, setNewPresetPrompt] = useState('');
   const savePresetTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const [showRawPromptLog, setShowRawPromptLog] = useState(false);
+  const [showRawNarrativeLog, setShowRawNarrativeLog] = useState(false);
   
   // Refs for auto-resizing textareas
   const systemPromptTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -86,15 +88,32 @@ const App: React.FC = () => {
         setSimulationPresets(simPresets);
         setNarrativePresets(narPresets);
         
-        // Автоматически выбираем промпт "default", если ничего не выбрано
+        // Автоматически загружаем промпт для установленного presetId, если он есть
         setAiSettings(prev => {
           const updates: Partial<typeof prev> = {};
           
+          // Если presetId установлен, но промпт не загружен - загружаем его
+          if (prev.systemPromptPresetId && !prev.systemPromptOverride) {
+            const preset = simPresets.find(p => p.id === prev.systemPromptPresetId);
+            if (preset) {
+              updates.systemPromptOverride = preset.prompt;
+            }
+          }
+          
+          // Автоматически выбираем промпт "default", если ничего не выбрано
           if (!prev.systemPromptPresetId && !prev.systemPromptOverride) {
             const defaultSimPreset = simPresets.find(p => p.id === 'default');
             if (defaultSimPreset) {
               updates.systemPromptPresetId = 'default';
               updates.systemPromptOverride = defaultSimPreset.prompt;
+            }
+          }
+          
+          // Если presetId установлен для narrative, но промпт не загружен - загружаем его
+          if (prev.narrativePromptPresetId && !prev.narrativePromptOverride) {
+            const preset = narPresets.find(p => p.id === prev.narrativePromptPresetId);
+            if (preset) {
+              updates.narrativePromptOverride = preset.prompt;
             }
           }
           
@@ -766,6 +785,67 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Neighbor locations objects toggle */}
+                  <div className="bg-black/30 border border-gray-800/50 rounded p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          Соседние локации: объекты
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-1 leading-snug">
+                          Если включено — в контекст симуляции добавляются объекты из соседних локаций (для планирования перемещения).
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 select-none">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                          {aiSettings.includeConnectedLocationObjects ? 'ON' : 'OFF'}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={!!aiSettings.includeConnectedLocationObjects}
+                          onChange={(e) =>
+                            setAiSettings(prev => ({
+                              ...prev,
+                              includeConnectedLocationObjects: e.target.checked
+                            }))
+                          }
+                          className="w-4 h-4 accent-cyan-500"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Neighbor locations objects compact toggle */}
+                  <div className={`bg-black/30 border rounded p-3 ${aiSettings.includeConnectedLocationObjects ? 'border-gray-800/50' : 'border-gray-800/30 opacity-60'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          Соседние локации: объекты (компактно)
+                        </div>
+                        <div className="text-[10px] text-gray-500 mt-1 leading-snug">
+                          Если включено — у объектов в соседних локациях убираются описания и атрибуты (меньше токенов, меньше “всезнания” по деталям).
+                        </div>
+                      </div>
+                      <label className="flex items-center gap-2 select-none">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                          {aiSettings.compactConnectedLocationObjects ? 'ON' : 'OFF'}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={!!aiSettings.compactConnectedLocationObjects}
+                          disabled={!aiSettings.includeConnectedLocationObjects}
+                          onChange={(e) =>
+                            setAiSettings(prev => ({
+                              ...prev,
+                              compactConnectedLocationObjects: e.target.checked
+                            }))
+                          }
+                          className="w-4 h-4 accent-cyan-500 disabled:opacity-60"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
                   {/* System Prompt Override with Presets */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
@@ -1002,7 +1082,7 @@ const App: React.FC = () => {
                     
                     <textarea
                       ref={systemPromptTextareaRef}
-                      value={aiSettings.systemPromptOverride ?? (simulationPresets.find(p => p.id === 'default')?.prompt || '')}
+                      value={aiSettings.systemPromptOverride ?? (simulationPresets.find(p => p.id === (aiSettings.systemPromptPresetId || 'default'))?.prompt || '')}
                       onChange={async (e) => {
                         const value = e.target.value;
                         const defaultPreset = simulationPresets.find(p => p.id === 'default');
@@ -1785,6 +1865,750 @@ const App: React.FC = () => {
                                 </details>
                             </div>
                         )}
+
+                        {/* Общие функции для парсинга и отображения логов */}
+                        {(() => {
+                            // Парсим размеченный лог на блоки
+                            const parseMarkedLog = (log: string): Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }> => {
+                                const MARKER_START = '<<<';
+                                const MARKER_END = '>>>';
+                                const blocks: Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }> = [];
+                                
+                                // Простой парсинг: находим каждый блок по его маркерам
+                                const extractBlock = (blockId: string, isSubblock: boolean = false): { id: string; type: 'block' | 'subblock'; content: string; children?: any[] } | null => {
+                                    const blockType = isSubblock ? 'SUBBLOCK' : 'BLOCK';
+                                    const endType = isSubblock ? 'ENDSUBBLOCK' : 'ENDBLOCK';
+                                    const regex = new RegExp(`${MARKER_START}${blockType}:${blockId}${MARKER_END}([\\s\\S]*?)${MARKER_START}${endType}:${blockId}${MARKER_END}`, 's');
+                                    const match = log.match(regex);
+                                    if (match) {
+                                        return {
+                                            id: blockId,
+                                            type: isSubblock ? 'subblock' : 'block',
+                                            content: match[1].trim(),
+                                            children: []
+                                        };
+                                    }
+                                    return null;
+                                };
+                                
+                                // Извлекаем основные блоки
+                                // Для SYSTEM_INSTRUCTION извлекаем подблоки напрямую в список (без контейнера)
+                                const systemSubblocks = ['BASE_PROMPT', 'WORLD_STATE', 'LOCATION_CONTEXT', 'HISTORY_SECTION'];
+                                systemSubblocks.forEach(subId => {
+                                    const subblock = extractBlock(subId, true);
+                                    if (subblock) {
+                                        blocks.push(subblock);
+                                    }
+                                });
+                                
+                                // Извлекаем остальные основные блоки
+                                const mainBlocks = ['SETTINGS', 'TOOLS', 'CONVERSATION_HISTORY', 'USER_PROMPT'];
+                                mainBlocks.forEach(blockId => {
+                                    const block = extractBlock(blockId, false);
+                                    if (block) {
+                                        // Для TOOLS извлекаем подблоки инструментов
+                                        if (blockId === 'TOOLS') {
+                                            const toolRegex = new RegExp(`${MARKER_START}SUBBLOCK:TOOL_(\\d+)${MARKER_END}([\\s\\S]*?)${MARKER_START}ENDSUBBLOCK:TOOL_\\d+${MARKER_END}`, 'g');
+                                            block.children = [];
+                                            let toolMatch;
+                                            while ((toolMatch = toolRegex.exec(block.content)) !== null) {
+                                                block.children.push({
+                                                    id: `TOOL_${toolMatch[1]}`,
+                                                    type: 'subblock',
+                                                    content: toolMatch[2].trim()
+                                                });
+                                            }
+                                        }
+                                        // Для USER_PROMPT извлекаем подблоки (для нарратива: PLAYER_INPUT, TOOLS_SUMMARY, SIMULATION_CONTEXT, NARRATIVE_INSTRUCTION)
+                                        if (blockId === 'USER_PROMPT') {
+                                            const userPromptSubblocks = ['PLAYER_INPUT', 'TOOLS_SUMMARY', 'SIMULATION_CONTEXT', 'NARRATIVE_INSTRUCTION'];
+                                            block.children = [];
+                                            userPromptSubblocks.forEach(subId => {
+                                                const subblock = extractBlock(subId, true);
+                                                if (subblock) {
+                                                    block.children.push(subblock);
+                                                }
+                                            });
+                                        }
+                                        blocks.push(block);
+                                    }
+                                });
+                                
+                                return blocks;
+                            };
+                            
+                            // Компонент для подсветки JSON: желтый - объекты, зеленый - свойства, синий - имена атрибутов, серый - значения
+                            const renderJsonHighlighted = (jsonText: string) => {
+                                try {
+                                    // Пытаемся найти JSON в тексте (может быть с префиксом "ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):")
+                                    const jsonMatch = jsonText.match(/ТЕКУЩЕЕ СОСТОЯНИЕ МИРА \(JSON\):\s*([\s\S]*)/);
+                                    const pureJson = jsonMatch ? jsonMatch[1].trim() : jsonText.trim();
+                                    
+                                    // Парсим JSON для валидации
+                                    const parsed = JSON.parse(pureJson);
+                                    
+                                    // Функция для рекурсивной подсветки JSON
+                                    const highlightJsonValue = (value: any, depth: number = 0, parentKey: string | null = null): React.ReactNode => {
+                                        const indent = '  '.repeat(depth);
+                                        
+                                        if (value === null) {
+                                            return <span className="text-gray-400">null</span>;
+                                        }
+                                        
+                                        if (typeof value === 'boolean') {
+                                            return <span className="text-gray-400">{String(value)}</span>;
+                                        }
+                                        
+                                        if (typeof value === 'number') {
+                                            return <span className="text-gray-400">{String(value)}</span>;
+                                        }
+                                        
+                                        if (typeof value === 'string') {
+                                            // Если это значение ключа "id" или "name", делаем желтым
+                                            if (parentKey === 'id' || parentKey === 'name') {
+                                                return <span className="text-yellow-400/70">"{value}"</span>;
+                                            }
+                                            return <span className="text-gray-400">"{value}"</span>;
+                                        }
+                                        
+                                        if (Array.isArray(value)) {
+                                            return (
+                                                <span>
+                                                    <span className="text-gray-500">{'['}</span>
+                                                    <br />
+                                                    {value.map((item, idx) => (
+                                                        <React.Fragment key={idx}>
+                                                            <span className="text-gray-500">{indent}  </span>
+                                                            {highlightJsonValue(item, depth + 1, null)}
+                                                            {idx < value.length - 1 && <span className="text-gray-500">,</span>}
+                                                            <br />
+                                                        </React.Fragment>
+                                                    ))}
+                                                    <span className="text-gray-500">{indent}</span>
+                                                    <span className="text-gray-500">{']'}</span>
+                                                </span>
+                                            );
+                                        }
+                                        
+                                        if (typeof value === 'object') {
+                                            const keys = Object.keys(value);
+                                            return (
+                                                <span>
+                                                    <span className="text-gray-500">{'{'}</span>
+                                                    <br />
+                                                    {keys.map((key, idx) => {
+                                                        let keyColor: string;
+                                                        // Определяем цвет ключа
+                                                        if (key === 'id' || key === 'name') {
+                                                            keyColor = 'text-yellow-400/70';
+                                                        } else if (parentKey === 'attributes') {
+                                                            keyColor = 'text-blue-400/70'; // имена атрибутов
+                                                        } else {
+                                                            keyColor = 'text-green-400/70'; // остальные свойства
+                                                        }
+                                                        
+                                                        return (
+                                                            <React.Fragment key={key}>
+                                                                <span className="text-gray-500">{indent}  </span>
+                                                                <span className={keyColor}>"{key}"</span>
+                                                                <span className="text-gray-500">: </span>
+                                                                {highlightJsonValue(value[key], depth + 1, key)}
+                                                                {idx < keys.length - 1 && <span className="text-gray-500">,</span>}
+                                                                <br />
+                                                            </React.Fragment>
+                                                        );
+                                                    })}
+                                                    <span className="text-gray-500">{indent}</span>
+                                                    <span className="text-gray-500">{'}'}</span>
+                                                </span>
+                                            );
+                                        }
+                                        
+                                        return <span className="text-gray-400">{String(value)}</span>;
+                                    };
+                                    
+                                    return (
+                                        <div className="text-sm font-mono leading-relaxed">
+                                            {jsonMatch && (
+                                                <div className="text-yellow-300/60 mb-2">
+                                                    ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
+                                                </div>
+                                            )}
+                                            {highlightJsonValue(parsed)}
+                                        </div>
+                                    );
+                                } catch (e) {
+                                    // Если не JSON или ошибка парсинга — возвращаем как есть
+                                    return <pre className="text-sm text-yellow-200/70 font-mono whitespace-pre-wrap">{jsonText}</pre>;
+                                }
+                            };
+                            
+                            return null; // Этот блок только определяет функции, не рендерит ничего
+                        })()}
+
+                        {/* Размеченный лог первого запроса к LLM */}
+                        {lastResult.markedPromptLog && (() => {
+                            // Парсим размеченный лог на блоки
+                            const parseMarkedLog = (log: string): Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }> => {
+                                const MARKER_START = '<<<';
+                                const MARKER_END = '>>>';
+                                const blocks: Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }> = [];
+                                
+                                // Простой парсинг: находим каждый блок по его маркерам
+                                const extractBlock = (blockId: string, isSubblock: boolean = false): { id: string; type: 'block' | 'subblock'; content: string; children?: any[] } | null => {
+                                    const blockType = isSubblock ? 'SUBBLOCK' : 'BLOCK';
+                                    const endType = isSubblock ? 'ENDSUBBLOCK' : 'ENDBLOCK';
+                                    const regex = new RegExp(`${MARKER_START}${blockType}:${blockId}${MARKER_END}([\\s\\S]*?)${MARKER_START}${endType}:${blockId}${MARKER_END}`, 's');
+                                    const match = log.match(regex);
+                                    if (match) {
+                                        return {
+                                            id: blockId,
+                                            type: isSubblock ? 'subblock' : 'block',
+                                            content: match[1].trim(),
+                                            children: []
+                                        };
+                                    }
+                                    return null;
+                                };
+                                
+                                // Извлекаем основные блоки
+                                // Для SYSTEM_INSTRUCTION извлекаем подблоки напрямую в список (без контейнера)
+                                const systemSubblocks = ['BASE_PROMPT', 'WORLD_STATE', 'LOCATION_CONTEXT', 'HISTORY_SECTION'];
+                                systemSubblocks.forEach(subId => {
+                                    const subblock = extractBlock(subId, true);
+                                    if (subblock) {
+                                        blocks.push(subblock);
+                                    }
+                                });
+                                
+                                // Извлекаем остальные основные блоки
+                                const mainBlocks = ['SETTINGS', 'TOOLS', 'CONVERSATION_HISTORY', 'USER_PROMPT'];
+                                mainBlocks.forEach(blockId => {
+                                    const block = extractBlock(blockId, false);
+                                    if (block) {
+                                        // Для TOOLS извлекаем подблоки инструментов
+                                        if (blockId === 'TOOLS') {
+                                            const toolRegex = new RegExp(`${MARKER_START}SUBBLOCK:TOOL_(\\d+)${MARKER_END}([\\s\\S]*?)${MARKER_START}ENDSUBBLOCK:TOOL_\\d+${MARKER_END}`, 'g');
+                                            block.children = [];
+                                            let toolMatch;
+                                            while ((toolMatch = toolRegex.exec(block.content)) !== null) {
+                                                block.children.push({
+                                                    id: `TOOL_${toolMatch[1]}`,
+                                                    type: 'subblock',
+                                                    content: toolMatch[2].trim()
+                                                });
+                                            }
+                                        }
+                                        blocks.push(block);
+                                    }
+                                });
+                                
+                                return blocks;
+                            };
+                            
+                            const blocks = parseMarkedLog(lastResult.markedPromptLog);
+                            
+                            const getBlockLabel = (id: string) => {
+                                const labels: Record<string, string> = {
+                                    'SETTINGS': '⚙️ Настройки запроса',
+                                    'BASE_PROMPT': '📄 Базовый промпт',
+                                    'WORLD_STATE': '🌍 Состояние мира (JSON)',
+                                    'LOCATION_CONTEXT': '📍 Контекст локации',
+                                    'HISTORY_SECTION': '📚 История ходов',
+                                    'TOOLS': '🔧 Инструменты',
+                                    'CONVERSATION_HISTORY': '💬 История разговора',
+                                    'USER_PROMPT': '👤 Запрос пользователя'
+                                };
+                                
+                                // Обработка блоков инструментов
+                                if (id.startsWith('TOOL_')) {
+                                    const toolNum = id.replace('TOOL_', '');
+                                    const toolNameMatch = blocks.find(b => b.id === 'TOOLS')?.children
+                                        ?.find((c: any) => c.id === id)?.content?.match(/Имя: ([^\n]+)/);
+                                    const toolName = toolNameMatch ? toolNameMatch[1] : `Инструмент ${toolNum}`;
+                                    return `🔨 ${toolName}`;
+                                }
+                                
+                                return labels[id] || id;
+                            };
+                            
+                            // Компонент для подсветки JSON: желтый - объекты, зеленый - свойства, синий - имена атрибутов, серый - значения
+                            const renderJsonHighlighted = (jsonText: string) => {
+                                try {
+                                    // Пытаемся найти JSON в тексте (может быть с префиксом "ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):")
+                                    const jsonMatch = jsonText.match(/ТЕКУЩЕЕ СОСТОЯНИЕ МИРА \(JSON\):\s*([\s\S]*)/);
+                                    const pureJson = jsonMatch ? jsonMatch[1].trim() : jsonText.trim();
+                                    
+                                    // Парсим JSON для валидации
+                                    const parsed = JSON.parse(pureJson);
+                                    
+                                    // Функция для рекурсивной подсветки JSON
+                                    const highlightJsonValue = (value: any, depth: number = 0, parentKey: string | null = null): React.ReactNode => {
+                                        const indent = '  '.repeat(depth);
+                                        
+                                        // Определяем, находимся ли мы внутри объекта attributes
+                                        const isInsideAttributes = parentKey === 'attributes';
+                                        
+                                        // Определяем, является ли это значением ключа "id" или "name"
+                                        const isIdOrNameValue = parentKey === 'id' || parentKey === 'name';
+                                        
+                                        if (value === null) {
+                                            return <span className="text-gray-400">null</span>;
+                                        }
+                                        
+                                        if (typeof value === 'boolean') {
+                                            return <span className="text-gray-400">{String(value)}</span>;
+                                        }
+                                        
+                                        if (typeof value === 'number') {
+                                            return <span className="text-gray-400">{value}</span>;
+                                        }
+                                        
+                                        if (typeof value === 'string') {
+                                            // Значения "id" и "name" - желтые, остальные - серые
+                                            const valueColor = isIdOrNameValue ? 'text-yellow-400/70' : 'text-gray-400';
+                                            if (value.length > 100) {
+                                                return <span className={valueColor}>"{value.substring(0, 100)}..."</span>;
+                                            }
+                                            return <span className={valueColor}>"{value}"</span>;
+                                        }
+                                        
+                                        if (Array.isArray(value)) {
+                                            if (value.length === 0) {
+                                                return <span className="text-gray-500">[]</span>;
+                                            }
+                                            return (
+                                                <span>
+                                                    <span className="text-gray-500">[</span>
+                                                    <br />
+                                                    {value.map((item, idx) => (
+                                                        <React.Fragment key={idx}>
+                                                            <span className="text-gray-500">{indent}  </span>
+                                                            {highlightJsonValue(item, depth + 1, null)}
+                                                            {idx < value.length - 1 && <span className="text-gray-500">,</span>}
+                                                            <br />
+                                                        </React.Fragment>
+                                                    ))}
+                                                    <span className="text-gray-500">{indent}]</span>
+                                                </span>
+                                            );
+                                        }
+                                        
+                                        if (typeof value === 'object') {
+                                            const keys = Object.keys(value);
+                                            if (keys.length === 0) {
+                                                return <span className="text-gray-500">{'{ }'}</span>;
+                                            }
+                                            
+                                            return (
+                                                <span>
+                                                    <span className="text-gray-500">{'{'}</span>
+                                                    <br />
+                                                    {keys.map((key, idx) => {
+                                                        // Определяем цвет ключа:
+                                                        // - внутри attributes: синий (имена атрибутов)
+                                                        // - основные системные ключи (id, name): желтый
+                                                        // - остальные: зеленый (свойства)
+                                                        let keyColor: string;
+                                                        if (isInsideAttributes) {
+                                                            keyColor = 'text-blue-400/70'; // имена атрибутов
+                                                        } else if (key === 'id' || key === 'name') {
+                                                            keyColor = 'text-yellow-400/70'; // основные системные ключи
+                                                        } else {
+                                                            keyColor = 'text-green-400/70'; // остальные свойства
+                                                        }
+                                                        
+                                                        return (
+                                                            <React.Fragment key={key}>
+                                                                <span className="text-gray-500">{indent}  </span>
+                                                                <span className={keyColor}>"{key}"</span>
+                                                                <span className="text-gray-500">: </span>
+                                                                {highlightJsonValue(value[key], depth + 1, key)}
+                                                                {idx < keys.length - 1 && <span className="text-gray-500">,</span>}
+                                                                <br />
+                                                            </React.Fragment>
+                                                        );
+                                                    })}
+                                                    <span className="text-gray-500">{indent}</span>
+                                                    <span className="text-gray-500">{'}'}</span>
+                                                </span>
+                                            );
+                                        }
+                                        
+                                        return <span className="text-gray-400">{String(value)}</span>;
+                                    };
+                                    
+                                    return (
+                                        <div className="text-sm font-mono leading-relaxed">
+                                            {jsonMatch && (
+                                                <div className="text-yellow-300/60 mb-2">
+                                                    ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
+                                                </div>
+                                            )}
+                                            {highlightJsonValue(parsed)}
+                                        </div>
+                                    );
+                                } catch (e) {
+                                    // Если не JSON или ошибка парсинга — возвращаем как есть
+                                    return <pre className="text-sm text-yellow-200/70 font-mono whitespace-pre-wrap">{jsonText}</pre>;
+                                }
+                            };
+                            
+                            const renderBlock = (block: any) => {
+                                const hasChildren = block.children && block.children.length > 0;
+                                const isWorldState = block.id === 'WORLD_STATE';
+                                
+                                return (
+                                    <div key={block.id} className="mb-2">
+                                        <details className="group" open={false}>
+                                            <summary className="cursor-pointer list-none">
+                                                <div className="flex items-center gap-2 text-[10px] font-bold text-yellow-500/70 uppercase tracking-wider hover:text-yellow-400 transition-colors">
+                                                    <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                                    <span>{getBlockLabel(block.id)}</span>
+                                                    <span className="text-gray-600 font-normal lowercase">
+                                                        ({block.content.length} символов)
+                                                    </span>
+                                                </div>
+                                            </summary>
+                                            <div className="bg-yellow-950/20 rounded-lg p-3 border border-yellow-900/30 mt-2">
+                                                {hasChildren ? (
+                                                    <div className="space-y-2">
+                                                        {block.children.map((child: any, idx: number) => {
+                                                            const isChildWorldState = child.id === 'WORLD_STATE';
+                                                            return (
+                                                                <div key={child.id} className="mb-2">
+                                                                    <details className="group" open={false}>
+                                                                        <summary className="cursor-pointer list-none">
+                                                                            <div className="flex items-center gap-2 text-[10px] font-bold text-yellow-400/60 uppercase tracking-wider hover:text-yellow-300/60 transition-colors">
+                                                                                <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                                                                <span>{getBlockLabel(child.id)}</span>
+                                                                                <span className="text-gray-600 font-normal lowercase">
+                                                                                    ({child.content.length} символов)
+                                                                                </span>
+                                                                            </div>
+                                                                        </summary>
+                                                                        <div className="bg-yellow-900/20 rounded-lg p-3 border border-yellow-800/30 mt-2">
+                                                                            <div className="overflow-x-auto max-h-96 overflow-y-auto bg-black/30 p-3 rounded border border-yellow-900/20">
+                                                                                {isChildWorldState ? renderJsonHighlighted(child.content) : (
+                                                                                    <pre className="text-sm text-yellow-200/70 font-mono whitespace-pre-wrap">
+                                                                                        {child.content}
+                                                                                    </pre>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </details>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <div className="overflow-x-auto max-h-96 overflow-y-auto bg-black/30 p-3 rounded border border-yellow-900/20">
+                                                        {isWorldState ? renderJsonHighlighted(block.content) : (
+                                                            <pre className="text-sm text-yellow-200/70 font-mono whitespace-pre-wrap">
+                                                                {block.content}
+                                                            </pre>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </details>
+                                    </div>
+                                );
+                            };
+                            
+                            return (
+                                <div className="mb-6">
+                                    <details className="group" open={false}>
+                                        <summary className="cursor-pointer list-none">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2 text-sm font-bold text-yellow-500/70 uppercase tracking-wider hover:text-yellow-400 transition-colors">
+                                                    <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                                    <span>📋 Лог LLM симуляции</span>
+                                                </div>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowRawPromptLog(!showRawPromptLog);
+                                                    }}
+                                                    className="text-[10px] px-2 py-1 bg-yellow-900/30 hover:bg-yellow-800/40 text-yellow-400 border border-yellow-700/50 rounded uppercase tracking-wider transition-colors"
+                                                >
+                                                    {showRawPromptLog ? 'структура' : 'raw'}
+                                                </button>
+                                            </div>
+                                        </summary>
+                                        <div className="mt-2 space-y-2">
+                                            {showRawPromptLog ? (
+                                                <pre className="text-sm text-yellow-200/70 font-mono whitespace-pre-wrap overflow-x-auto max-h-[600px] overflow-y-auto bg-black/30 p-4 rounded border border-yellow-900/20">
+                                                    {lastResult.markedPromptLog}
+                                                </pre>
+                                            ) : (
+                                                blocks.map((block) => renderBlock(block))
+                                            )}
+                                        </div>
+                                    </details>
+                                </div>
+                            );
+                        })()}
+
+                        {lastResult.narrativeMarkedPromptLog && (() => {
+                            // Парсим размеченный лог на блоки (с поддержкой подблоков USER_PROMPT для нарратива)
+                            const parseMarkedLog = (log: string): Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }> => {
+                                const MARKER_START = '<<<';
+                                const MARKER_END = '>>>';
+                                const blocks: Array<{ id: string; type: 'block' | 'subblock'; content: string; children?: any[] }> = [];
+                                
+                                // Простой парсинг: находим каждый блок по его маркерам
+                                const extractBlock = (blockId: string, isSubblock: boolean = false): { id: string; type: 'block' | 'subblock'; content: string; children?: any[] } | null => {
+                                    const blockType = isSubblock ? 'SUBBLOCK' : 'BLOCK';
+                                    const endType = isSubblock ? 'ENDSUBBLOCK' : 'ENDBLOCK';
+                                    const regex = new RegExp(`${MARKER_START}${blockType}:${blockId}${MARKER_END}([\\s\\S]*?)${MARKER_START}${endType}:${blockId}${MARKER_END}`, 's');
+                                    const match = log.match(regex);
+                                    if (match) {
+                                        return {
+                                            id: blockId,
+                                            type: isSubblock ? 'subblock' : 'block',
+                                            content: match[1].trim(),
+                                            children: []
+                                        };
+                                    }
+                                    return null;
+                                };
+                                
+                                // Извлекаем основные блоки
+                                // Для SYSTEM_INSTRUCTION извлекаем подблоки напрямую в список (без контейнера)
+                                const systemSubblocks = ['BASE_PROMPT', 'WORLD_STATE', 'LOCATION_CONTEXT', 'HISTORY_SECTION'];
+                                systemSubblocks.forEach(subId => {
+                                    const subblock = extractBlock(subId, true);
+                                    if (subblock) {
+                                        blocks.push(subblock);
+                                    }
+                                });
+                                
+                                // Извлекаем остальные основные блоки
+                                const mainBlocks = ['SETTINGS', 'USER_PROMPT'];
+                                mainBlocks.forEach(blockId => {
+                                    const block = extractBlock(blockId, false);
+                                    if (block) {
+                                        // Для USER_PROMPT извлекаем подблоки (для нарратива: PLAYER_INPUT, TOOLS_SUMMARY, SIMULATION_CONTEXT, NARRATIVE_INSTRUCTION)
+                                        if (blockId === 'USER_PROMPT') {
+                                            const userPromptSubblocks = ['PLAYER_INPUT', 'TOOLS_SUMMARY', 'SIMULATION_CONTEXT', 'NARRATIVE_INSTRUCTION'];
+                                            block.children = [];
+                                            userPromptSubblocks.forEach(subId => {
+                                                const subblock = extractBlock(subId, true);
+                                                if (subblock) {
+                                                    block.children.push(subblock);
+                                                }
+                                            });
+                                        }
+                                        blocks.push(block);
+                                    }
+                                });
+                                
+                                return blocks;
+                            };
+                            
+                            const narrativeBlocks = parseMarkedLog(lastResult.narrativeMarkedPromptLog);
+                            
+                            // Компонент для подсветки JSON
+                            const renderJsonHighlighted = (jsonText: string) => {
+                                try {
+                                    const jsonMatch = jsonText.match(/ТЕКУЩЕЕ СОСТОЯНИЕ МИРА \(JSON\):\s*([\s\S]*)/);
+                                    const pureJson = jsonMatch ? jsonMatch[1].trim() : jsonText.trim();
+                                    const parsed = JSON.parse(pureJson);
+                                    
+                                    const highlightJsonValue = (value: any, depth: number = 0, parentKey: string | null = null): React.ReactNode => {
+                                        const indent = '  '.repeat(depth);
+                                        const isInsideAttributes = parentKey === 'attributes';
+                                        const isIdOrNameValue = parentKey === 'id' || parentKey === 'name';
+                                        
+                                        if (value === null) return <span className="text-gray-400">null</span>;
+                                        if (typeof value === 'boolean') return <span className="text-gray-400">{String(value)}</span>;
+                                        if (typeof value === 'number') return <span className="text-gray-400">{value}</span>;
+                                        
+                                        if (typeof value === 'string') {
+                                            const valueColor = isIdOrNameValue ? 'text-yellow-400/70' : 'text-gray-400';
+                                            return <span className={valueColor}>"{value}"</span>;
+                                        }
+                                        
+                                        if (Array.isArray(value)) {
+                                            if (value.length === 0) return <span className="text-gray-500">[]</span>;
+                                            return (
+                                                <span>
+                                                    <span className="text-gray-500">[</span>
+                                                    <br />
+                                                    {value.map((item, idx) => (
+                                                        <React.Fragment key={idx}>
+                                                            <span className="text-gray-500">{indent}  </span>
+                                                            {highlightJsonValue(item, depth + 1, null)}
+                                                            {idx < value.length - 1 && <span className="text-gray-500">,</span>}
+                                                            <br />
+                                                        </React.Fragment>
+                                                    ))}
+                                                    <span className="text-gray-500">{indent}]</span>
+                                                </span>
+                                            );
+                                        }
+                                        
+                                        if (typeof value === 'object') {
+                                            const keys = Object.keys(value);
+                                            if (keys.length === 0) return <span className="text-gray-500">{'{ }'}</span>;
+                                            return (
+                                                <span>
+                                                    <span className="text-gray-500">{'{'}</span>
+                                                    <br />
+                                                    {keys.map((key, idx) => {
+                                                        let keyColor: string;
+                                                        if (isInsideAttributes) {
+                                                            keyColor = 'text-blue-400/70';
+                                                        } else if (key === 'id' || key === 'name') {
+                                                            keyColor = 'text-yellow-400/70';
+                                                        } else {
+                                                            keyColor = 'text-green-400/70';
+                                                        }
+                                                        return (
+                                                            <React.Fragment key={key}>
+                                                                <span className="text-gray-500">{indent}  </span>
+                                                                <span className={keyColor}>"{key}"</span>
+                                                                <span className="text-gray-500">: </span>
+                                                                {highlightJsonValue(value[key], depth + 1, key)}
+                                                                {idx < keys.length - 1 && <span className="text-gray-500">,</span>}
+                                                                <br />
+                                                            </React.Fragment>
+                                                        );
+                                                    })}
+                                                    <span className="text-gray-500">{indent}</span>
+                                                    <span className="text-gray-500">{'}'}</span>
+                                                </span>
+                                            );
+                                        }
+                                        
+                                        return <span className="text-gray-400">{String(value)}</span>;
+                                    };
+                                    
+                                    return (
+                                        <div className="text-sm font-mono leading-relaxed">
+                                            {jsonMatch && (
+                                                <div className="text-purple-300/60 mb-2">
+                                                    ТЕКУЩЕЕ СОСТОЯНИЕ МИРА (JSON):
+                                                </div>
+                                            )}
+                                            {highlightJsonValue(parsed)}
+                                        </div>
+                                    );
+                                } catch (e) {
+                                    return <pre className="text-sm text-purple-200/70 font-mono whitespace-pre-wrap">{jsonText}</pre>;
+                                }
+                            };
+                            
+                            const getNarrativeBlockLabel = (id: string) => {
+                                const labels: Record<string, string> = {
+                                    'SETTINGS': '⚙️ Настройки запроса',
+                                    'BASE_PROMPT': '📄 Базовый промпт',
+                                    'WORLD_STATE': '🌍 Состояние мира (JSON)',
+                                    'LOCATION_CONTEXT': '📍 Контекст локации',
+                                    'HISTORY_SECTION': '📚 История ходов',
+                                    'USER_PROMPT': '👤 Запрос пользователя',
+                                    'PLAYER_INPUT': '💬 Запрос игрока',
+                                    'TOOLS_SUMMARY': '🔧 Выполненные изменения',
+                                    'SIMULATION_CONTEXT': '🧠 Рассуждения симуляции',
+                                    'NARRATIVE_INSTRUCTION': '📝 Инструкция для нарратива'
+                                };
+                                return labels[id] || id;
+                            };
+                            
+                            return (
+                                <div className="mb-6">
+                                    <details className="group" open={false}>
+                                        <summary className="cursor-pointer list-none">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2 text-sm font-bold text-purple-500/70 uppercase tracking-wider hover:text-purple-400 transition-colors">
+                                                    <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                                    <span>📋 Лог LLM нарратива</span>
+                                                </div>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setShowRawNarrativeLog(!showRawNarrativeLog);
+                                                    }}
+                                                    className="text-[10px] px-2 py-1 bg-purple-900/30 hover:bg-purple-800/40 text-purple-400 border border-purple-700/50 rounded uppercase tracking-wider transition-colors"
+                                                >
+                                                    {showRawNarrativeLog ? 'структура' : 'raw'}
+                                                </button>
+                                            </div>
+                                        </summary>
+                                        <div className="mt-2 space-y-2">
+                                            {showRawNarrativeLog ? (
+                                                <pre className="text-sm text-purple-200/70 font-mono whitespace-pre-wrap overflow-x-auto max-h-[600px] overflow-y-auto bg-black/30 p-4 rounded border border-purple-900/20">
+                                                    {lastResult.narrativeMarkedPromptLog}
+                                                </pre>
+                                            ) : (
+                                                narrativeBlocks.map((block) => {
+                                                    const isWorldState = block.id === 'WORLD_STATE';
+                                                    const hasChildren = block.children && block.children.length > 0;
+                                                    
+                                                    return (
+                                                        <div key={block.id} className="mb-2">
+                                                            <details className="group" open={false}>
+                                                                <summary className="cursor-pointer list-none">
+                                                                    <div className="flex items-center gap-2 text-[10px] font-bold text-purple-400/60 uppercase tracking-wider hover:text-purple-300/60 transition-colors">
+                                                                        <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                                                        <span>{getNarrativeBlockLabel(block.id)}</span>
+                                                                        <span className="text-gray-600 font-normal lowercase">
+                                                                            ({block.content.length} символов)
+                                                                        </span>
+                                                                    </div>
+                                                                </summary>
+                                                                <div className="bg-purple-950/20 rounded-lg p-3 border border-purple-900/30 mt-2">
+                                                                    {hasChildren ? (
+                                                                        <div className="space-y-2">
+                                                                            {block.children.map((child: any, idx: number) => {
+                                                                                const isChildWorldState = child.id === 'WORLD_STATE';
+                                                                                return (
+                                                                                    <div key={child.id} className="mb-2">
+                                                                                        <details className="group" open={false}>
+                                                                                            <summary className="cursor-pointer list-none">
+                                                                                                <div className="flex items-center gap-2 text-[10px] font-bold text-purple-400/60 uppercase tracking-wider hover:text-purple-300/60 transition-colors">
+                                                                                                    <span className="transform transition-transform group-open:rotate-90">▶</span>
+                                                                                                    <span>{getNarrativeBlockLabel(child.id)}</span>
+                                                                                                    <span className="text-gray-600 font-normal lowercase">
+                                                                                                        ({child.content.length} символов)
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </summary>
+                                                                                            <div className="bg-purple-900/20 rounded-lg p-3 border border-purple-800/30 mt-2">
+                                                                                                <div className="overflow-x-auto max-h-96 overflow-y-auto bg-black/30 p-3 rounded border border-purple-900/20">
+                                                                                                    {isChildWorldState ? renderJsonHighlighted(child.content) : (
+                                                                                                        <pre className="text-sm text-purple-200/70 font-mono whitespace-pre-wrap">
+                                                                                                            {child.content}
+                                                                                                        </pre>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </details>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="overflow-x-auto max-h-96 overflow-y-auto bg-black/30 p-3 rounded border border-purple-900/20">
+                                                                            {isWorldState ? renderJsonHighlighted(block.content) : (
+                                                                                <pre className="text-sm text-purple-200/70 font-mono whitespace-pre-wrap">
+                                                                                    {block.content}
+                                                                                </pre>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </details>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </details>
+                                </div>
+                            );
+                        })()}
 
                         <div className="mb-6">
                             <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-2 tracking-wider">
