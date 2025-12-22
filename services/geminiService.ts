@@ -651,9 +651,24 @@ export const processGameTurn = async (
       }
 
       // Соседние локации (для навигации/доступных переходов)
+      // Учитываем как прямые связи из локаций игроков, так и обратные (bidirectional)
       const connectedLocationIds = new Set<string>();
       for (const loc of playerLocations) {
         loc.connections.forEach(conn => connectedLocationIds.add(conn.targetLocationId));
+      }
+      // Также проверяем обратные связи: если какая-то локация связана с локацией игрока,
+      // она должна считаться соседней (для bidirectional connections)
+      for (const loc of normalizedState.locations) {
+        if (!playerLocationIds.includes(loc.id)) {
+          // Проверяем, есть ли связь от этой локации к локации игрока
+          const hasConnectionToPlayerLocation = loc.connections.some(conn => 
+            playerLocationIds.includes(conn.targetLocationId) && 
+            (conn.type === 'bidirectional' || conn.type === 'in' || conn.type === 'out')
+          );
+          if (hasConnectionToPlayerLocation) {
+            connectedLocationIds.add(loc.id);
+          }
+        }
       }
       // Не включаем локации игроков как "соседние"
       for (const id of playerLocationIds) connectedLocationIds.delete(id);
